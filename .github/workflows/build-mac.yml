@@ -1,0 +1,72 @@
+name: Build macOS Installer
+
+# Runs on every push to main, any version tag (v1.0.0, etc.),
+# or manually from the Actions tab (useful for downloading a one-off build).
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    # macos-13 = Intel x86_64 -- the built .app runs on every Mac
+    # (Intel natively; Apple Silicon via the built-in Rosetta 2 layer).
+    runs-on: macos-13
+
+    steps:
+      # ---- 1. Source code ---------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ---- 2. Python --------------------------------------------------------
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # ---- 3. Dependencies --------------------------------------------------
+      - name: Install Python dependencies
+        run: pip install mido reportlab Pillow pyinstaller
+
+      # ---- 4. Icons ---------------------------------------------------------
+      - name: Generate icons (including .icns)
+        run: python3 assets/create_icon.py
+
+      # ---- 5. Bundle --------------------------------------------------------
+      - name: Build with PyInstaller
+        run: python3 -m PyInstaller build/MIDI2TAB.spec --clean --noconfirm
+
+      # ---- 6. DMG -----------------------------------------------------------
+      - name: Create disk image (.dmg)
+        run: |
+          mkdir -p installer_output
+          TMP_DIR=$(mktemp -d)
+
+          # Copy .app and add an Applications alias for drag-and-drop install
+          cp -r dist/MIDI2TAB.app "$TMP_DIR/"
+          ln -s /Applications "$TMP_DIR/Applications"
+
+          hdiutil create \
+            -volname "MIDI2TAB" \
+            -srcfolder "$TMP_DIR" \
+            -ov \
+            -format UDZO \
+            installer_output/MIDI2TAB_v1.0.0.dmg
+
+          rm -rf "$TMP_DIR"
+
+      # ---- 7. Upload artifact (all builds) ----------------------------------
+      - name: Upload DMG as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MIDI2TAB-macOS
+          path: installer_output/MIDI2TAB_v1.0.0.dmg
+          retention-days: 30
+
+      # ---- 8. Attach to GitHub Release (tag builds only) --------------------
+      - name: Attach DMG to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer_output/MIDI2TAB_v1.0.0.dmg

@@ -1,0 +1,19 @@
+# ── PyInstaller output ────────────────────────────────
+dist/
+build/MIDI2TAB/
+installer_output/
+
+# ── Python cache ──────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# ── User data ─────────────────────────────────────────
+user_presets.json
+
+# ── Editor / tool files ───────────────────────────────
+.claude/
+*.log
+.DS_Store
+Thumbs.db

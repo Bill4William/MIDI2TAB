@@ -1,0 +1,9 @@
+# Force Unix line endings for shell scripts (required for macOS execution)
+*.sh    text eol=lf
+
+# Force Windows line endings for Windows batch files
+*.bat   text eol=crlf
+*.iss   text eol=crlf
+
+# All other text files: use the committer's native endings
+*       text=auto
