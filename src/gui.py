@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import sys
 import tempfile
 import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext, simpledialog, ttk
@@ -56,8 +57,27 @@ PRESETS: dict[str, List[str]] = {
 
 # ── User preset persistence ───────────────────────────────────────────────────
 
-_PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-USER_PRESETS_FILE = os.path.join(_PROJECT_DIR, "user_presets.json")
+def _user_data_dir() -> str:
+    """Return a stable, writable app-data folder regardless of how the app is launched.
+
+    Uses the OS-standard location so the path is identical whether the app is
+    run from source (python main.py) or as a compiled PyInstaller executable.
+
+      Windows : %APPDATA%\\MIDI2TAB\\
+      macOS   : ~/Library/Application Support/MIDI2TAB/
+      Linux   : ~/.config/MIDI2TAB/
+    """
+    if sys.platform == "win32":
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+    elif sys.platform == "darwin":
+        base = os.path.expanduser("~/Library/Application Support")
+    else:
+        base = os.environ.get("XDG_CONFIG_HOME", os.path.expanduser("~/.config"))
+    app_dir = os.path.join(base, "MIDI2TAB")
+    os.makedirs(app_dir, exist_ok=True)
+    return app_dir
+
+USER_PRESETS_FILE = os.path.join(_user_data_dir(), "user_presets.json")
 
 
 def _load_user_presets() -> dict[str, List[str]]:
