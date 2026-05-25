@@ -55,6 +55,22 @@ PRESETS: dict[str, List[str]] = {
     "Custom": [],
 }
 
+# ── Resource path helper (works from source and PyInstaller exe) ──────────────
+
+def _resource_path(relative: str) -> str:
+    """Return the absolute path to a bundled resource file.
+
+    When running from source, resolves relative to the project root.
+    When running as a PyInstaller exe, resolves inside sys._MEIPASS
+    (the _internal/ folder that PyInstaller unpacks at runtime).
+    """
+    base = getattr(
+        sys, "_MEIPASS",
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    )
+    return os.path.join(base, relative)
+
+
 # ── User preset persistence ───────────────────────────────────────────────────
 
 def _user_data_dir() -> str:
@@ -104,6 +120,14 @@ class App(tk.Tk):
         self.title("MIDI2TAB")
         self.geometry("1150x700")
         self.minsize(820, 500)
+
+        # Set window icon (title bar + taskbar)
+        # iconbitmap() is Windows-only; macOS Dock icon comes from the .app bundle
+        if sys.platform == "win32":
+            try:
+                self.iconbitmap(_resource_path("assets/icon.ico"))
+            except Exception:
+                pass  # don't crash if the icon file is missing
 
         self._midi_path: Optional[str] = None
         self._tab_text: Optional[str] = None          # screen display (user's mpl)

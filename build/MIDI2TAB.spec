@@ -28,7 +28,11 @@ a = Analysis(
     [os.path.join(project_root, "main.py")],
     pathex=[project_root],
     binaries=[],
-    datas=[],
+    datas=[
+        # Bundle the icon so it can be loaded at runtime for the window title bar.
+        # The tuple is (source_path, dest_folder_inside_bundle).
+        (os.path.join(project_root, "assets", "icon.ico"), "assets"),
+    ],
     hiddenimports=[
         # mido file I/O (no playback backend needed)
         "mido",
