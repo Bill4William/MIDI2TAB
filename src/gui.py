@@ -5,9 +5,12 @@ import os
 import re
 import sys
 import tempfile
+import webbrowser
 import tkinter as tk
-from tkinter import filedialog, messagebox, scrolledtext, simpledialog, ttk
+from tkinter import filedialog, messagebox, simpledialog
 from typing import List, Optional
+
+import customtkinter as ctk
 
 from .midi_parser import parse_midi
 from .pdf_exporter import export_pdf
@@ -19,26 +22,22 @@ from .tab_formatter import (
 )
 from .tab_generator import PlacedNote, assign_notes, note_name, parse_note_name
 
-# ── Note options for tuning dropdowns ────────────────────────────────────────
+# ── Appearance — matches AlocasiaTrack exactly ────────────────────────────────
+ctk.set_appearance_mode("dark")
+ctk.set_default_color_theme("green")
 
+# ── Note options for tuning dropdowns ─────────────────────────────────────────
 _NOTE_NAMES_SHARP = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-# C0 through B7 — covers all practical instrument ranges
-NOTE_OPTIONS: List[str] = [
-    f"{n}{o}" for o in range(0, 8) for n in _NOTE_NAMES_SHARP
-]
+NOTE_OPTIONS: List[str] = [f"{n}{o}" for o in range(0, 8) for n in _NOTE_NAMES_SHARP]
 
 # ── Key signature options ─────────────────────────────────────────────────────
-
 KEY_OPTIONS: List[str] = [
     "",
-    # Major keys
     "C", "G", "D", "A", "E", "B", "F#", "Gb", "Db", "C#", "Ab", "Eb", "Bb", "F",
-    # Minor keys
     "Am", "Em", "Bm", "F#m", "C#m", "G#m", "Ebm", "D#m", "Bbm", "Fm", "Cm", "Gm", "Dm",
 ]
 
-# ── Built-in presets (all open-string notes shifted up one octave) ────────────
-
+# ── Built-in presets ──────────────────────────────────────────────────────────
 PRESETS: dict[str, List[str]] = {
     "Guitar – Standard 6-string":  ["E5", "B4", "G4", "D4", "A3", "E3"],
     "Guitar – Drop D 6-string":    ["E5", "B4", "G4", "D4", "A3", "D3"],
@@ -55,34 +54,18 @@ PRESETS: dict[str, List[str]] = {
     "Custom": [],
 }
 
-# ── Resource path helper (works from source and PyInstaller exe) ──────────────
+# ── Resource path (works from source and inside PyInstaller bundle) ───────────
 
 def _resource_path(relative: str) -> str:
-    """Return the absolute path to a bundled resource file.
-
-    When running from source, resolves relative to the project root.
-    When running as a PyInstaller exe, resolves inside sys._MEIPASS
-    (the _internal/ folder that PyInstaller unpacks at runtime).
-    """
     base = getattr(
         sys, "_MEIPASS",
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     )
     return os.path.join(base, relative)
 
-
 # ── User preset persistence ───────────────────────────────────────────────────
 
 def _user_data_dir() -> str:
-    """Return a stable, writable app-data folder regardless of how the app is launched.
-
-    Uses the OS-standard location so the path is identical whether the app is
-    run from source (python main.py) or as a compiled PyInstaller executable.
-
-      Windows : %APPDATA%\\MIDI2TAB\\
-      macOS   : ~/Library/Application Support/MIDI2TAB/
-      Linux   : ~/.config/MIDI2TAB/
-    """
     if sys.platform == "win32":
         base = os.environ.get("APPDATA", os.path.expanduser("~"))
     elif sys.platform == "darwin":
@@ -114,24 +97,24 @@ def _save_user_presets_file(user_presets: dict[str, List[str]]) -> None:
 
 # ── Main application ──────────────────────────────────────────────────────────
 
-class App(tk.Tk):
+class App(ctk.CTk):
     def __init__(self) -> None:
         super().__init__()
         self.title("MIDI2TAB")
-        self.geometry("1150x700")
-        self.minsize(820, 500)
+        self.geometry("1200x720")
+        self.minsize(860, 520)
 
-        # Set window icon (title bar + taskbar)
-        # iconbitmap() is Windows-only; macOS Dock icon comes from the .app bundle
+        # Window icon (Windows only — macOS uses the .app bundle)
         if sys.platform == "win32":
             try:
                 self.iconbitmap(_resource_path("assets/icon.ico"))
             except Exception:
-                pass  # don't crash if the icon file is missing
+                pass
 
+        # ── State ─────────────────────────────────────────────────────────
         self._midi_path: Optional[str] = None
-        self._tab_text: Optional[str] = None          # screen display (user's mpl)
-        self._placed: Optional[List[PlacedNote]] = None   # raw placed notes for reformatting
+        self._tab_text: Optional[str] = None
+        self._placed: Optional[List[PlacedNote]] = None
         self._tuning_pitches: Optional[List[int]] = None
         self._beats_per_measure: int = 4
         self._tuning_vars: List[tk.StringVar] = []
@@ -143,8 +126,13 @@ class App(tk.Tk):
         self._bpm_var       = tk.StringVar()
         self._key_var       = tk.StringVar()
 
+        # ── Layout ────────────────────────────────────────────────────────
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
+
         self._build_menu()
-        self._build_ui()
+        self._build_sidebar()
+        self._build_content()
 
         self.after(0, lambda: self._apply_preset("Guitar – Standard 6-string"))
 
@@ -152,225 +140,294 @@ class App(tk.Tk):
 
     def _build_menu(self) -> None:
         bar = tk.Menu(self)
-        self.config(menu=bar)
+        self.configure(menu=bar)
 
         file_ = tk.Menu(bar, tearoff=0)
         bar.add_cascade(label="File", menu=file_)
-        file_.add_command(label="Open MIDI…\tCtrl+O", command=self._open_midi)
+        file_.add_command(label="Open MIDI…\tCtrl+O",    command=self._open_midi)
         file_.add_separator()
         file_.add_command(label="Save as Text…\tCtrl+S", command=self._save_text)
         file_.add_command(label="Save as PDF…\tCtrl+Shift+S", command=self._save_pdf)
         file_.add_separator()
-        file_.add_command(label="Print…\tCtrl+P", command=self._print_tab)
+        file_.add_command(label="Print…\tCtrl+P",        command=self._print_tab)
         file_.add_separator()
-        file_.add_command(label="Exit", command=self.quit)
+        file_.add_command(label="Exit",                   command=self.quit)
 
         help_ = tk.Menu(bar, tearoff=0)
         bar.add_cascade(label="Help", menu=help_)
-        help_.add_command(label="About MIDI2TAB", command=self._show_about)
+        help_.add_command(label="Help / Manual",    command=self._open_manual)
+        help_.add_command(label="About MIDI2TAB",   command=self._show_about)
 
         self.bind_all("<Control-o>", lambda _: self._open_midi())
         self.bind_all("<Control-s>", lambda _: self._save_text())
         self.bind_all("<Control-S>", lambda _: self._save_pdf())
         self.bind_all("<Control-p>", lambda _: self._print_tab())
 
-    # ── Layout ────────────────────────────────────────────────────────────────
+    # ── Sidebar ───────────────────────────────────────────────────────────────
 
-    def _build_ui(self) -> None:
-        paned = ttk.PanedWindow(self, orient=tk.HORIZONTAL)
-        paned.pack(fill=tk.BOTH, expand=True, padx=4, pady=4)
+    def _build_sidebar(self) -> None:
+        sidebar = ctk.CTkFrame(self, width=290, corner_radius=0,
+                               fg_color=("gray92", "gray14"))
+        sidebar.grid(row=0, column=0, sticky="nsew")
+        sidebar.grid_propagate(False)
+        sidebar.grid_rowconfigure(3, weight=1)   # scrollable area expands
+        sidebar.grid_columnconfigure(0, weight=1)
 
-        left = ttk.Frame(paned, width=280)
-        left.pack_propagate(False)
-        paned.add(left, weight=0)
-        self._build_settings(left)
+        # App title
+        ctk.CTkLabel(
+            sidebar, text="MIDI2TAB",
+            font=ctk.CTkFont(size=17, weight="bold"),
+            text_color=("gray20", "white"),
+        ).grid(row=0, column=0, padx=20, pady=(22, 2), sticky="w")
 
-        right = ttk.Frame(paned)
-        paned.add(right, weight=1)
-        self._build_display(right)
+        ctk.CTkLabel(
+            sidebar, text="MIDI to Tablature",
+            font=ctk.CTkFont(size=11),
+            text_color=("gray55", "gray55"),
+        ).grid(row=1, column=0, padx=20, pady=(0, 10), sticky="w")
 
-        self._status = tk.StringVar(value="Ready.  Open a MIDI file to begin.")
-        ttk.Label(self, textvariable=self._status, relief=tk.SUNKEN, anchor=tk.W).pack(
-            fill=tk.X, side=tk.BOTTOM, padx=2, pady=2
+        ctk.CTkFrame(sidebar, height=1,
+                     fg_color=("gray80", "gray30")).grid(
+            row=2, column=0, sticky="ew", padx=12, pady=(0, 4))
+
+        # Scrollable settings
+        scroll = ctk.CTkScrollableFrame(sidebar, fg_color="transparent",
+                                        corner_radius=0)
+        scroll.grid(row=3, column=0, sticky="nsew")
+        scroll.grid_columnconfigure(0, weight=1)
+        self._build_settings(scroll)
+
+        # Bottom section
+        ctk.CTkFrame(sidebar, height=1,
+                     fg_color=("gray80", "gray30")).grid(
+            row=4, column=0, sticky="ew", padx=12, pady=(4, 4))
+
+        ctk.CTkButton(
+            sidebar, text="Generate Tab",
+            font=ctk.CTkFont(size=13, weight="bold"),
+            height=42, command=self._generate,
+        ).grid(row=5, column=0, padx=12, pady=(0, 4), sticky="ew")
+
+        ctk.CTkButton(
+            sidebar, text="? Help / Manual", anchor="w",
+            font=ctk.CTkFont(size=12),
+            fg_color="transparent",
+            hover_color=("gray80", "gray28"),
+            text_color=("gray40", "gray60"),
+            corner_radius=8,
+            command=self._open_manual,
+        ).grid(row=6, column=0, padx=10, pady=(0, 2), sticky="ew")
+
+        ctk.CTkLabel(
+            sidebar, text="v1.0.0",
+            font=ctk.CTkFont(size=10),
+            text_color=("gray60", "gray50"),
+        ).grid(row=7, column=0, padx=20, pady=(0, 14), sticky="w")
+
+    def _build_settings(self, f: ctk.CTkScrollableFrame) -> None:
+
+        def _section(text: str) -> None:
+            ctk.CTkLabel(
+                f, text=text,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                text_color=("gray30", "gray70"),
+                anchor="w",
+            ).pack(fill="x", padx=14, pady=(12, 1))
+            ctk.CTkFrame(f, height=1,
+                         fg_color=("gray80", "gray30")).pack(
+                fill="x", padx=12, pady=(0, 6))
+
+        # ── MIDI File ──────────────────────────────────────────────────────
+        _section("MIDI File")
+        file_row = ctk.CTkFrame(f, fg_color="transparent")
+        file_row.pack(fill="x", padx=12, pady=(0, 4))
+        self._file_lbl = ctk.CTkLabel(
+            file_row,
+            text="No file selected",
+            text_color=("gray55", "gray55"),
+            anchor="w",
+            wraplength=200,
+            font=ctk.CTkFont(size=11),
         )
+        self._file_lbl.pack(side="left", fill="x", expand=True)
+        ctk.CTkButton(
+            file_row, text="…", width=34, height=28,
+            font=ctk.CTkFont(size=13),
+            command=self._open_midi,
+        ).pack(side="right")
 
-    # ── Settings panel ────────────────────────────────────────────────────────
+        # ── Song Info ──────────────────────────────────────────────────────
+        _section("Song Info")
+        song_frame = ctk.CTkFrame(f, fg_color="transparent")
+        song_frame.pack(fill="x", padx=12, pady=(0, 4))
 
-    def _build_settings(self, parent: ttk.Frame) -> None:
-        canvas = tk.Canvas(parent, borderwidth=0, highlightthickness=0)
-        vsb = ttk.Scrollbar(parent, orient="vertical", command=canvas.yview)
-        self._inner = ttk.Frame(canvas)
-        self._inner.bind(
-            "<Configure>",
-            lambda _: canvas.configure(scrollregion=canvas.bbox("all")),
-        )
-        canvas.create_window((0, 0), window=self._inner, anchor="nw")
-        canvas.configure(yscrollcommand=vsb.set)
-        vsb.pack(side=tk.RIGHT, fill=tk.Y)
-        canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        def _info_row(parent, label, var, width=160, combo=False, values=None):
+            fr = ctk.CTkFrame(parent, fg_color="transparent")
+            fr.pack(fill="x", pady=1)
+            ctk.CTkLabel(fr, text=label, width=56, anchor="w",
+                         font=ctk.CTkFont(size=11)).pack(side="left")
+            if combo:
+                ctk.CTkComboBox(fr, variable=var, values=values or [],
+                                width=width, state="normal",
+                                font=ctk.CTkFont(size=11)).pack(side="left")
+            else:
+                ctk.CTkEntry(fr, textvariable=var, width=width, height=26,
+                             font=ctk.CTkFont(size=11)).pack(side="left")
 
-        def _scroll(ev: tk.Event) -> None:
-            canvas.yview_scroll(-1 * (ev.delta // 120), "units")
+        _info_row(song_frame, "Song:",   self._song_name_var)
+        _info_row(song_frame, "Artist:", self._artist_var)
+        _info_row(song_frame, "BPM:",    self._bpm_var, width=80)
+        _info_row(song_frame, "Key:",    self._key_var, width=130,
+                  combo=True, values=KEY_OPTIONS)
 
-        canvas.bind("<Enter>", lambda _: canvas.bind_all("<MouseWheel>", _scroll))
-        canvas.bind("<Leave>", lambda _: canvas.unbind_all("<MouseWheel>"))
-
-        f = self._inner
-        P = {"padx": 8, "pady": 3}
-
-        # ── MIDI File ──
-        self._section(f, "MIDI File")
-        row = ttk.Frame(f)
-        row.pack(fill=tk.X, **P)
-        self._file_lbl = ttk.Label(
-            row, text="No file selected", foreground="gray",
-            wraplength=185, justify=tk.LEFT,
-        )
-        self._file_lbl.pack(side=tk.LEFT, fill=tk.X, expand=True)
-        ttk.Button(row, text="…", width=3, command=self._open_midi).pack(side=tk.RIGHT)
-
-        ttk.Separator(f, orient="horizontal").pack(fill=tk.X, pady=6)
-
-        # ── Song Info ──
-        self._section(f, "Song Info")
-
-        def _info_row(label: str, var: tk.StringVar, widget_fn) -> None:
-            r = ttk.Frame(f)
-            r.pack(fill=tk.X, **P)
-            ttk.Label(r, text=label, width=8, anchor=tk.W).pack(side=tk.LEFT)
-            widget_fn(r, var)
-
-        def _entry(parent, var):
-            ttk.Entry(parent, textvariable=var).pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        def _bpm_entry(parent, var):
-            ttk.Entry(parent, textvariable=var, width=7).pack(side=tk.LEFT)
-
-        def _key_cb(parent, var):
-            ttk.Combobox(
-                parent, textvariable=var,
-                values=KEY_OPTIONS, state="normal", width=10,
-            ).pack(side=tk.LEFT)
-
-        _info_row("Song:", self._song_name_var, _entry)
-        _info_row("Artist:", self._artist_var, _entry)
-        _info_row("BPM:", self._bpm_var, _bpm_entry)
-        _info_row("Key:", self._key_var, _key_cb)
-
-        ttk.Separator(f, orient="horizontal").pack(fill=tk.X, pady=6)
-
-        # ── Preset ──
-        self._section(f, "Preset")
+        # ── Preset ────────────────────────────────────────────────────────
+        _section("Preset")
         self._preset_var = tk.StringVar(value="Guitar – Standard 6-string")
-        self._preset_cb = ttk.Combobox(
-            f, textvariable=self._preset_var,
-            values=self._preset_list(), state="readonly", width=28,
+        self._preset_cb = ctk.CTkComboBox(
+            f,
+            variable=self._preset_var,
+            values=self._preset_list(),
+            state="readonly",
+            width=260,
+            font=ctk.CTkFont(size=11),
+            command=lambda v: self._apply_preset(v),
         )
-        self._preset_cb.pack(fill=tk.X, **P)
-        self._preset_cb.bind(
-            "<<ComboboxSelected>>",
-            lambda _: self._apply_preset(self._preset_var.get()),
-        )
+        self._preset_cb.pack(fill="x", padx=12, pady=(0, 3))
 
-        btn_row = ttk.Frame(f)
-        btn_row.pack(fill=tk.X, padx=8, pady=(0, 3))
-        ttk.Button(btn_row, text="Save Preset…", command=self._save_preset).pack(
-            side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 2)
-        )
-        self._del_btn = ttk.Button(
-            btn_row, text="Delete", command=self._delete_preset,
-        )
-        self._del_btn.pack(side=tk.LEFT)
+        btn_row = ctk.CTkFrame(f, fg_color="transparent")
+        btn_row.pack(fill="x", padx=12, pady=(0, 4))
+        ctk.CTkButton(
+            btn_row, text="Save Preset…", height=28,
+            font=ctk.CTkFont(size=11),
+            command=self._save_preset,
+        ).pack(side="left", fill="x", expand=True, padx=(0, 3))
+        ctk.CTkButton(
+            btn_row, text="Delete", height=28,
+            font=ctk.CTkFont(size=11),
+            fg_color=("gray75", "gray25"),
+            hover_color=("gray65", "gray30"),
+            command=self._delete_preset,
+        ).pack(side="left")
 
-        ttk.Separator(f, orient="horizontal").pack(fill=tk.X, pady=6)
-
-        # ── Strings ──
-        self._section(f, "Strings")
-        sf = ttk.Frame(f)
-        sf.pack(fill=tk.X, **P)
-        ttk.Label(sf, text="Number of strings:").pack(side=tk.LEFT)
+        # ── Strings ───────────────────────────────────────────────────────
+        _section("Strings")
         self._num_strings = tk.IntVar(value=6)
-        spin = ttk.Spinbox(
-            sf, textvariable=self._num_strings, from_=1, to=12, width=4,
-            command=self._on_strings_changed,
-        )
-        spin.pack(side=tk.RIGHT)
-        spin.bind("<Return>", lambda _: self._on_strings_changed())
-        spin.bind("<FocusOut>", lambda _: self._on_strings_changed())
+        self._make_spinner(f, "Number of strings:", self._num_strings,
+                           1, 12, callback=self._on_strings_changed)
 
-        ttk.Separator(f, orient="horizontal").pack(fill=tk.X, pady=6)
+        # ── Tuning ────────────────────────────────────────────────────────
+        _section("Tuning  (high → low)")
+        self._tuning_container = ctk.CTkFrame(f, fg_color="transparent")
+        self._tuning_container.pack(fill="x", padx=12, pady=(0, 4))
 
-        # ── Tuning ──
-        self._section(f, "Tuning  (high → low string)")
-        self._tuning_frame = ttk.Frame(f)
-        self._tuning_frame.pack(fill=tk.X, **P)
-
-        ttk.Separator(f, orient="horizontal").pack(fill=tk.X, pady=6)
-
-        # ── Options ──
-        self._section(f, "Options")
-
-        def _opt_row(label: str) -> ttk.Frame:
-            r = ttk.Frame(f)
-            r.pack(fill=tk.X, **P)
-            ttk.Label(r, text=label).pack(side=tk.LEFT)
-            return r
+        # ── Options ───────────────────────────────────────────────────────
+        _section("Options")
+        opts = ctk.CTkFrame(f, fg_color="transparent")
+        opts.pack(fill="x", padx=12, pady=(0, 4))
 
         self._beats_var = tk.IntVar(value=4)
-        r = _opt_row("Beats per measure:")
-        ttk.Spinbox(r, textvariable=self._beats_var, from_=2, to=12, width=4).pack(side=tk.RIGHT)
-
-        self._mpl_var = tk.IntVar(value=4)
-        r = _opt_row("Measures per line:")
-        ttk.Spinbox(r, textvariable=self._mpl_var, from_=1, to=8, width=4).pack(side=tk.RIGHT)
-
+        self._mpl_var   = tk.IntVar(value=4)
         self._channel_var = tk.StringVar(value="All")
-        r = _opt_row("MIDI channel:")
-        ttk.Combobox(
-            r, textvariable=self._channel_var,
+
+        self._make_spinner(opts, "Beats per measure:", self._beats_var, 2, 12, pack=True)
+        self._make_spinner(opts, "Measures per line:", self._mpl_var,   1, 8,  pack=True)
+
+        ch_row = ctk.CTkFrame(opts, fg_color="transparent")
+        ch_row.pack(fill="x", pady=1)
+        ctk.CTkLabel(ch_row, text="MIDI channel:", anchor="w",
+                     font=ctk.CTkFont(size=12)).pack(side="left", fill="x", expand=True)
+        ctk.CTkComboBox(
+            ch_row, variable=self._channel_var,
             values=["All"] + [str(i) for i in range(16)],
-            state="readonly", width=5,
-        ).pack(side=tk.RIGHT)
+            state="readonly", width=80,
+            font=ctk.CTkFont(size=11),
+        ).pack(side="right")
 
-        ttk.Separator(f, orient="horizontal").pack(fill=tk.X, pady=6)
+        # Bottom padding
+        ctk.CTkLabel(f, text="").pack()
 
-        ttk.Button(f, text="Generate Tab", command=self._generate).pack(
-            fill=tk.X, padx=8, pady=8, ipady=5
+    def _make_spinner(self, parent, label: str, var: tk.IntVar,
+                      min_val: int, max_val: int,
+                      callback=None, pack: bool = False) -> ctk.CTkFrame:
+        """Label  [−]  [value entry]  [+]  row."""
+        fr = ctk.CTkFrame(parent, fg_color="transparent")
+        if pack:
+            fr.pack(fill="x", pady=1)
+        else:
+            fr.pack(fill="x", padx=0, pady=1)
+
+        ctk.CTkLabel(fr, text=label, anchor="w",
+                     font=ctk.CTkFont(size=12)).pack(side="left", fill="x", expand=True)
+
+        def _step(delta: int):
+            v = var.get() + delta
+            if min_val <= v <= max_val:
+                var.set(v)
+                if callback:
+                    callback()
+
+        ctk.CTkButton(fr, text="−", width=26, height=24,
+                      font=ctk.CTkFont(size=14),
+                      command=lambda: _step(-1)).pack(side="left", padx=(4, 1))
+        ctk.CTkEntry(fr, textvariable=var, width=40, height=24,
+                     justify="center",
+                     font=ctk.CTkFont(size=11)).pack(side="left", padx=1)
+        ctk.CTkButton(fr, text="+", width=26, height=24,
+                      font=ctk.CTkFont(size=14),
+                      command=lambda: _step(1)).pack(side="left", padx=(1, 0))
+        return fr
+
+    # ── Content area ──────────────────────────────────────────────────────────
+
+    def _build_content(self) -> None:
+        content = ctk.CTkFrame(self, corner_radius=0,
+                               fg_color=("gray95", "gray13"))
+        content.grid(row=0, column=1, sticky="nsew")
+        content.grid_columnconfigure(0, weight=1)
+        content.grid_rowconfigure(1, weight=1)
+
+        # Toolbar
+        tb = ctk.CTkFrame(content, fg_color="transparent")
+        tb.grid(row=0, column=0, sticky="ew", padx=12, pady=(12, 4))
+        for text, cmd in [("Save Text", self._save_text),
+                          ("Save PDF",  self._save_pdf),
+                          ("Print",     self._print_tab)]:
+            ctk.CTkButton(tb, text=text, width=90, height=30,
+                          font=ctk.CTkFont(size=12),
+                          command=cmd).pack(side="left", padx=(0, 6))
+
+        # Tab display with horizontal scrollbar
+        text_frame = ctk.CTkFrame(content, fg_color="transparent")
+        text_frame.grid(row=1, column=0, sticky="nsew", padx=12, pady=0)
+        text_frame.grid_columnconfigure(0, weight=1)
+        text_frame.grid_rowconfigure(0, weight=1)
+
+        self._text = ctk.CTkTextbox(
+            text_frame,
+            font=ctk.CTkFont(family="Courier New", size=10),
+            wrap="none",
+            state="disabled",
+            fg_color=("#f5f5f5", "#1e1e1e"),
+            text_color=("#1a1a1a", "#d4d4d4"),
         )
+        self._text.grid(row=0, column=0, sticky="nsew")
 
-    def _section(self, parent: ttk.Frame, text: str) -> None:
-        ttk.Label(parent, text=text, font=("TkDefaultFont", 9, "bold")).pack(
-            anchor=tk.W, padx=8, pady=(2, 0)
-        )
+        hbar = ctk.CTkScrollbar(text_frame, orientation="horizontal",
+                                 command=self._text._textbox.xview)
+        hbar.grid(row=1, column=0, sticky="ew")
+        self._text._textbox.configure(xscrollcommand=hbar.set)
 
-    # ── Tab display panel ─────────────────────────────────────────────────────
-
-    def _build_display(self, parent: ttk.Frame) -> None:
-        tb = ttk.Frame(parent)
-        tb.pack(fill=tk.X, pady=(0, 2))
-        ttk.Button(tb, text="Save Text", command=self._save_text).pack(side=tk.LEFT, padx=2)
-        ttk.Button(tb, text="Save PDF",  command=self._save_pdf ).pack(side=tk.LEFT, padx=2)
-        ttk.Button(tb, text="Print",     command=self._print_tab).pack(side=tk.LEFT, padx=2)
-
-        self._text = scrolledtext.ScrolledText(
-            parent,
-            font=("Courier New", 10),
-            wrap=tk.NONE,
-            state=tk.DISABLED,
-            background="#1e1e1e",
-            foreground="#d4d4d4",
-            insertbackground="white",
-        )
-        self._text.pack(fill=tk.BOTH, expand=True)
-
-        hbar = ttk.Scrollbar(parent, orient=tk.HORIZONTAL, command=self._text.xview)
-        hbar.pack(fill=tk.X)
-        self._text.configure(xscrollcommand=hbar.set)
+        # Status bar
+        self._status = tk.StringVar(value="Ready.  Open a MIDI file to begin.")
+        ctk.CTkLabel(
+            content, textvariable=self._status,
+            anchor="w", font=ctk.CTkFont(size=11),
+            text_color=("gray50", "gray55"),
+        ).grid(row=2, column=0, sticky="ew", padx=14, pady=(2, 8))
 
     # ── Preset helpers ────────────────────────────────────────────────────────
 
     def _preset_list(self) -> List[str]:
-        """All preset names: built-ins first, then user presets, then Custom."""
         built_in = [k for k in PRESETS if k != "Custom"]
         user = list(self._user_presets.keys())
         return built_in + user + ["Custom"]
@@ -382,11 +439,8 @@ class App(tk.Tk):
         self._preset_cb.configure(values=self._preset_list())
 
     def _save_preset(self) -> None:
-        name = simpledialog.askstring(
-            "Save Preset",
-            "Enter a name for this preset:",
-            parent=self,
-        )
+        name = simpledialog.askstring("Save Preset", "Enter a name for this preset:",
+                                      parent=self)
         if not name:
             return
         name = name.strip()
@@ -394,21 +448,16 @@ class App(tk.Tk):
             messagebox.showwarning("Invalid Name", "Preset name cannot be blank.")
             return
         if name in PRESETS:
-            messagebox.showwarning(
-                "Reserved Name",
-                f"'{name}' is a built-in preset and cannot be overwritten.",
-            )
+            messagebox.showwarning("Reserved Name",
+                f"'{name}' is a built-in preset and cannot be overwritten.")
             return
         notes = [v.get() for v in self._tuning_vars]
-        # Validate all notes before saving
         for i, n in enumerate(notes):
             try:
                 parse_note_name(n)
             except ValueError:
-                messagebox.showerror(
-                    "Invalid Tuning",
-                    f"String {i + 1} has an invalid note '{n}'. Fix the tuning first.",
-                )
+                messagebox.showerror("Invalid Tuning",
+                    f"String {i + 1} has an invalid note '{n}'. Fix the tuning first.")
                 return
         self._user_presets[name] = notes
         _save_user_presets_file(self._user_presets)
@@ -419,13 +468,12 @@ class App(tk.Tk):
     def _delete_preset(self) -> None:
         name = self._preset_var.get()
         if name in PRESETS:
-            messagebox.showwarning(
-                "Cannot Delete",
-                f"'{name}' is a built-in preset and cannot be deleted.",
-            )
+            messagebox.showwarning("Cannot Delete",
+                f"'{name}' is a built-in preset and cannot be deleted.")
             return
         if name not in self._user_presets:
-            messagebox.showwarning("Not Found", f"'{name}' is not a saved user preset.")
+            messagebox.showwarning("Not Found",
+                f"'{name}' is not a saved user preset.")
             return
         if not messagebox.askyesno("Delete Preset", f"Delete preset '{name}'?"):
             return
@@ -438,7 +486,7 @@ class App(tk.Tk):
     # ── Tuning rows ───────────────────────────────────────────────────────────
 
     def _rebuild_tuning_rows(self, notes: Optional[List[str]] = None) -> None:
-        for w in self._tuning_frame.winfo_children():
+        for w in self._tuning_container.winfo_children():
             w.destroy()
 
         n = self._num_strings.get()
@@ -446,20 +494,20 @@ class App(tk.Tk):
         self._tuning_vars = []
 
         for i in range(n):
-            if notes is not None:
-                default = notes[i] if i < len(notes) else "E3"
-            else:
-                default = existing[i] if i < len(existing) else "E3"
-
-            row = ttk.Frame(self._tuning_frame)
-            row.pack(fill=tk.X, pady=1)
-            ttk.Label(row, text=f"String {i + 1}:", width=10).pack(side=tk.LEFT)
+            default = (notes[i] if notes and i < len(notes)
+                       else existing[i] if i < len(existing)
+                       else "E3")
+            row = ctk.CTkFrame(self._tuning_container, fg_color="transparent")
+            row.pack(fill="x", pady=1)
+            ctk.CTkLabel(row, text=f"String {i + 1}:", width=74, anchor="w",
+                         font=ctk.CTkFont(size=11)).pack(side="left")
             var = tk.StringVar(value=default)
-            cb = ttk.Combobox(
-                row, textvariable=var,
-                values=NOTE_OPTIONS, state="readonly", width=7,
-            )
-            cb.pack(side=tk.LEFT)
+            ctk.CTkComboBox(
+                row, variable=var,
+                values=NOTE_OPTIONS,
+                state="readonly", width=105,
+                font=ctk.CTkFont(size=11),
+            ).pack(side="left")
             self._tuning_vars.append(var)
 
     def _apply_preset(self, preset_name: str) -> None:
@@ -481,8 +529,7 @@ class App(tk.Tk):
         self._key_var.set("")
         try:
             _, _, tempo_us, _, key_sig = parse_midi(path)
-            bpm = round(60_000_000 / tempo_us)
-            self._bpm_var.set(str(bpm))
+            self._bpm_var.set(str(round(60_000_000 / tempo_us)))
             if key_sig:
                 self._key_var.set(key_sig)
         except Exception:
@@ -490,29 +537,18 @@ class App(tk.Tk):
 
     def _build_song_info_line(self) -> str:
         parts = []
-        name   = self._song_name_var.get().strip()
-        artist = self._artist_var.get().strip()
-        bpm    = self._bpm_var.get().strip()
-        key    = self._key_var.get().strip()
-        if name:
-            parts.append(name)
-        if artist:
-            parts.append(artist)
-        if bpm:
-            parts.append(f"{bpm}bpm")
-        if key:
-            parts.append(f"Key of {key}")
+        if n := self._song_name_var.get().strip(): parts.append(n)
+        if a := self._artist_var.get().strip():    parts.append(a)
+        if b := self._bpm_var.get().strip():       parts.append(f"{b}bpm")
+        if k := self._key_var.get().strip():       parts.append(f"Key of {k}")
         return ", ".join(parts)
 
     def _build_instrument_line(self) -> str:
         preset_name = self._preset_var.get()
         num_str     = self._num_strings.get()
         instrument, tuning_name = self._parse_preset_name(preset_name)
-        notes_low_to_high = [
-            self._note_letter_only(v.get())
-            for v in reversed(self._tuning_vars)
-        ]
-        notes_str = "".join(notes_low_to_high)
+        notes_str = "".join(self._note_letter_only(v.get())
+                            for v in reversed(self._tuning_vars))
         parts = [f"{num_str} String {instrument}"]
         if tuning_name:
             parts.append(tuning_name)
@@ -525,13 +561,13 @@ class App(tk.Tk):
 
     @staticmethod
     def _parse_preset_name(preset_name: str) -> tuple:
-        sep = " – "  # " – " (en dash)
+        sep = " – "
         if sep not in preset_name:
             return preset_name, ""
         instrument, rest = preset_name.split(sep, 1)
-        rest = re.sub(r"\s+\d+-string$", "", rest)   # "Standard 6-string" → "Standard"
-        rest = re.sub(r"^\d+-string$",   "", rest)   # bare "7-string" → ""
-        rest = re.sub(r"\s+\(.*?\)$",   "", rest)   # "Standard (GCEA)" → "Standard"
+        rest = re.sub(r"\s+\d+-string$", "", rest)
+        rest = re.sub(r"^\d+-string$",   "", rest)
+        rest = re.sub(r"\s+\(.*?\)$",   "", rest)
         return instrument, rest.strip()
 
     # ── Tuning validation ─────────────────────────────────────────────────────
@@ -542,10 +578,8 @@ class App(tk.Tk):
             try:
                 tuning.append(parse_note_name(var.get()))
             except ValueError as exc:
-                messagebox.showerror(
-                    "Invalid Tuning",
-                    f"String {i + 1}: '{var.get()}' is not a valid note.\n\n{exc}",
-                )
+                messagebox.showerror("Invalid Tuning",
+                    f"String {i + 1}: '{var.get()}' is not a valid note.\n\n{exc}")
                 return None
         return tuning
 
@@ -558,7 +592,8 @@ class App(tk.Tk):
         )
         if path:
             self._midi_path = path
-            self._file_lbl.config(text=os.path.basename(path), foreground="black")
+            self._file_lbl.configure(text=os.path.basename(path),
+                                     text_color=("gray20", "gray90"))
             self._status.set(f"Loaded: {os.path.basename(path)}")
             self._autofill_from_midi(path)
 
@@ -579,7 +614,8 @@ class App(tk.Tk):
             notes, tpb, _tempo, _ts, _ks = parse_midi(self._midi_path, channel_filter)
 
             if not notes:
-                messagebox.showwarning("No Notes", "No notes found in this file or channel.")
+                messagebox.showwarning("No Notes",
+                    "No notes found in this file or channel.")
                 self._status.set("No notes found.")
                 return
 
@@ -589,20 +625,17 @@ class App(tk.Tk):
             placed = assign_notes(notes, tuning, tpb, beats)
 
             if not placed:
-                messagebox.showwarning(
-                    "Out of Range",
+                messagebox.showwarning("Out of Range",
                     "None of the notes could be placed on this instrument.\n"
-                    "Check that the tuning covers the MIDI pitch range.",
-                )
+                    "Check that the tuning covers the MIDI pitch range.")
                 self._status.set("No notes could be placed.")
                 return
 
-            # Store raw results so saves can reformat to the correct page width
-            self._placed = placed
-            self._tuning_pitches = tuning
+            self._placed           = placed
+            self._tuning_pitches   = tuning
             self._beats_per_measure = beats
-            self._song_info = self._build_song_info_line()
-            self._instrument_info = self._build_instrument_line()
+            self._song_info        = self._build_song_info_line()
+            self._instrument_info  = self._build_instrument_line()
 
             tab = format_tab(
                 placed, len(tuning), tuning,
@@ -620,24 +653,23 @@ class App(tk.Tk):
                 msg += f"  ({skipped} out of range, skipped)"
             self._status.set(msg)
 
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             import traceback
             traceback.print_exc()
             messagebox.showerror("Error", f"Failed to generate tab:\n{exc}")
             self._status.set("Error — see console for details.")
 
     def _show_tab(self, text: str) -> None:
-        self._text.config(state=tk.NORMAL)
-        self._text.delete("1.0", tk.END)
-        self._text.insert("1.0", text)
-        self._text.config(state=tk.DISABLED)
+        self._text.configure(state="normal")
+        self._text.delete("0.0", "end")
+        self._text.insert("0.0", text)
+        self._text.configure(state="disabled")
 
     def _reformat_for_width(self, max_chars: int) -> str:
-        """Return tab text reformatted so every line fits within max_chars columns."""
         if self._placed is None or self._tuning_pitches is None:
             return self._tab_text or ""
         labels = [note_name(p) for p in self._tuning_pitches]
-        label_width = max(len(lbl) for lbl in labels) + 1  # +1 for the "|"
+        label_width = max(len(lbl) for lbl in labels) + 1
         mpl = measures_per_line_for_width(
             max_chars,
             beats_per_measure=self._beats_per_measure,
@@ -669,9 +701,8 @@ class App(tk.Tk):
             initialfile="tab.txt",
         )
         if path:
-            text = self._reformat_for_width(TXT_MAX_CHARS)
             with open(path, "w", encoding="utf-8") as fh:
-                fh.write(text)
+                fh.write(self._reformat_for_width(TXT_MAX_CHARS))
             self._status.set(f"Saved: {os.path.basename(path)}")
 
     def _save_pdf(self) -> None:
@@ -684,7 +715,7 @@ class App(tk.Tk):
             initialfile="tab.pdf",
         )
         if path:
-            title = (
+            title = self._song_name_var.get().strip() or (
                 os.path.splitext(os.path.basename(self._midi_path))[0]
                 if self._midi_path else "Tablature"
             )
@@ -696,13 +727,11 @@ class App(tk.Tk):
             return
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
             tmp_path = tmp.name
-
-        title = (
+        title = self._song_name_var.get().strip() or (
             os.path.splitext(os.path.basename(self._midi_path))[0]
             if self._midi_path else "Tablature"
         )
         export_pdf(self._reformat_for_width(PDF_MAX_CHARS), tmp_path, title=title)
-
         try:
             os.startfile(tmp_path, "print")
             self._status.set("Sent to printer.")
@@ -713,10 +742,14 @@ class App(tk.Tk):
             except Exception as exc:
                 messagebox.showerror("Print Error", str(exc))
 
+    def _open_manual(self) -> None:
+        path = _resource_path("docs/manual.html")
+        webbrowser.open(f"file:///{path.replace(os.sep, '/')}")
+
     def _show_about(self) -> None:
         messagebox.showinfo(
             "About MIDI2TAB",
-            "MIDI2TAB\n\n"
+            "MIDI2TAB  v1.0.0\n\n"
             "Converts MIDI files to guitar and bass tablature.\n\n"
             "• Custom string counts and tunings\n"
             "• Save and load your own instrument presets\n"

@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MIDI2TAB — User Manual</title>
+<style>
+  :root {
+    --bg:        #141a14;
+    --panel:     #1c271c;
+    --border:    #2e422e;
+    --accent:    #4caf6a;
+    --accent2:   #76c893;
+    --text:      #dce8dc;
+    --muted:     #7a9b7a;
+    --warn-bg:   #2a2010;
+    --warn-bdr:  #7a6020;
+    --warn-txt:  #e0c060;
+    --tip-bg:    #0e2218;
+    --tip-bdr:   #2e6040;
+    --tip-txt:   #80d0a0;
+    --code-bg:   #0d1a0d;
+    --sidebar-w: 240px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    font-size: 15px;
+    line-height: 1.7;
+  }
+
+  /* ── Sidebar ── */
+  #sidebar {
+    position: fixed;
+    top: 0; left: 0;
+    width: var(--sidebar-w);
+    height: 100vh;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    padding: 24px 0 32px;
+    z-index: 100;
+  }
+  #sidebar .brand {
+    padding: 0 20px 20px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 12px;
+  }
+  #sidebar .brand h1 { font-size: 16px; font-weight: 700; color: var(--accent); }
+  #sidebar .brand p  { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  #sidebar ul { list-style: none; }
+  #sidebar ul li a {
+    display: block;
+    padding: 5px 20px;
+    font-size: 13px;
+    color: var(--muted);
+    text-decoration: none;
+    border-left: 2px solid transparent;
+    transition: color .15s, border-color .15s;
+  }
+  #sidebar ul li a:hover { color: var(--accent2); border-left-color: var(--accent2); }
+  #sidebar ul li.section-head {
+    padding: 14px 20px 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .08em;
+    color: var(--border);
+  }
+
+  /* ── Main content ── */
+  #content {
+    margin-left: var(--sidebar-w);
+    padding: 48px 56px 80px;
+    max-width: 900px;
+  }
+
+  /* ── Typography ── */
+  h1 { font-size: 30px; color: var(--accent); margin-bottom: 6px; }
+  h2 { font-size: 22px; color: var(--accent2); margin: 48px 0 14px;
+       padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 17px; color: var(--text); margin: 28px 0 10px; }
+  h4 { font-size: 14px; color: var(--accent2); margin: 20px 0 6px; font-weight: 600; }
+  p  { margin-bottom: 12px; }
+  ul, ol { margin: 8px 0 14px 22px; }
+  li { margin-bottom: 5px; }
+  a  { color: var(--accent2); }
+  strong { color: #fff; font-weight: 600; }
+  code {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 6px;
+    font-family: 'Consolas', monospace;
+    font-size: 13px;
+    color: var(--accent2);
+  }
+  pre {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 18px;
+    overflow-x: auto;
+    margin: 10px 0 16px;
+    font-family: 'Consolas', monospace;
+    font-size: 13px;
+    color: var(--accent2);
+    line-height: 1.5;
+  }
+
+  /* ── Callout boxes ── */
+  .tip, .warn, .note {
+    border-radius: 6px;
+    padding: 12px 16px;
+    margin: 14px 0;
+    font-size: 14px;
+  }
+  .tip  { background: var(--tip-bg);  border-left: 3px solid var(--accent);   color: var(--tip-txt);  }
+  .warn { background: var(--warn-bg); border-left: 3px solid var(--warn-bdr); color: var(--warn-txt); }
+  .note { background: var(--panel);   border-left: 3px solid var(--border);   color: var(--muted);    }
+  .tip::before  { content: "💡 "; }
+  .warn::before { content: "⚠️  "; }
+  .note::before { content: "ℹ️  "; }
+
+  /* ── Steps ── */
+  .steps { counter-reset: step; list-style: none; margin-left: 0; }
+  .steps li {
+    counter-increment: step;
+    padding: 10px 14px 10px 52px;
+    position: relative;
+    margin-bottom: 8px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 14px; top: 50%;
+    transform: translateY(-50%);
+    width: 24px; height: 24px;
+    background: var(--accent);
+    color: #0d1a0d;
+    font-weight: 700; font-size: 12px;
+    border-radius: 50%;
+    display: flex; align-items: center;
+    justify-content: center;
+    text-align: center; line-height: 24px;
+  }
+
+  /* ── Tables ── */
+  table { width: 100%; border-collapse: collapse; margin: 12px 0 18px; font-size: 14px; }
+  th { background: var(--panel); color: var(--accent2); padding: 8px 12px;
+       text-align: left; border-bottom: 2px solid var(--border); }
+  td { padding: 7px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+
+  /* ── Hero ── */
+  .hero { margin-bottom: 40px; }
+  .hero .subtitle { color: var(--muted); font-size: 16px; margin-top: 4px; }
+  .version-badge {
+    display: inline-block;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 2px 10px;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 10px;
+  }
+
+  /* ── Scrollbar ── */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════  SIDEBAR  ══════════════════════════ -->
+<nav id="sidebar">
+  <div class="brand">
+    <h1>MIDI2TAB</h1>
+    <p>User Manual</p>
+  </div>
+  <ul>
+    <li class="section-head">Getting Started</li>
+    <li><a href="#intro">Introduction</a></li>
+    <li><a href="#install">Installation</a></li>
+    <li><a href="#quickstart">Quick Start</a></li>
+
+    <li class="section-head">Settings Panel</li>
+    <li><a href="#midi-file">MIDI File</a></li>
+    <li><a href="#song-info">Song Info</a></li>
+    <li><a href="#presets">Presets</a></li>
+    <li><a href="#strings-tuning">Strings &amp; Tuning</a></li>
+    <li><a href="#options">Options</a></li>
+
+    <li class="section-head">Output</li>
+    <li><a href="#tab-display">Tab Display</a></li>
+    <li><a href="#save-text">Save as Text</a></li>
+    <li><a href="#save-pdf">Save as PDF</a></li>
+    <li><a href="#print">Print</a></li>
+
+    <li class="section-head">Reference</li>
+    <li><a href="#tab-format">Reading the Tab</a></li>
+    <li><a href="#data-location">Data &amp; Files</a></li>
+    <li><a href="#troubleshooting">Troubleshooting</a></li>
+  </ul>
+</nav>
+
+<!-- ═══════════════════════════════════  CONTENT  ══════════════════════════ -->
+<main id="content">
+
+<!-- ── Introduction ──────────────────────────────────────────────────────── -->
+<section id="intro">
+  <div class="hero">
+    <h1>MIDI2TAB</h1>
+    <p class="subtitle">Convert MIDI files to guitar and bass tablature</p>
+    <span class="version-badge">v1.0.0</span>
+  </div>
+
+  <p>
+    MIDI2TAB is a desktop application that reads standard <code>.mid</code> /
+    <code>.midi</code> files and converts the note data into ASCII tablature,
+    formatted for any fretted string instrument. The output can be viewed on
+    screen, saved as a plain-text file, exported to PDF, or sent directly to
+    a printer.
+  </p>
+
+  <table>
+    <tr><th>Feature</th><th>What it does</th></tr>
+    <tr><td><strong>MIDI parsing</strong></td><td>Reads tempo, time signature, and key signature automatically from the file</td></tr>
+    <tr><td><strong>Custom tunings</strong></td><td>Set any open-string note (C0–B7) for each string individually via dropdown</td></tr>
+    <tr><td><strong>String count</strong></td><td>Supports 1 to 12 strings — guitar, bass, ukulele, or anything in between</td></tr>
+    <tr><td><strong>Presets</strong></td><td>Built-in tunings for guitar, bass, and ukulele; save your own named presets</td></tr>
+    <tr><td><strong>Song metadata</strong></td><td>BPM and key auto-populated from the MIDI file; you can fill in song name and artist</td></tr>
+    <tr><td><strong>Silent compression</strong></td><td>Empty measures are replaced with a "Silent for N Measures" annotation instead of blank dashes</td></tr>
+    <tr><td><strong>Page-safe output</strong></td><td>Tab is automatically reformatted to fit 8.5×11" paper with 0.5" margins — no cutoff</td></tr>
+    <tr><td><strong>Export</strong></td><td>Save as <code>.txt</code>, save as <code>.pdf</code>, or print directly from the app</td></tr>
+  </table>
+</section>
+
+<!-- ── Installation ───────────────────────────────────────────────────────── -->
+<section id="install">
+  <h2>Installation</h2>
+
+  <h3>Windows installer (recommended)</h3>
+  <ol class="steps">
+    <li>Run <strong>MIDI2TAB_Setup_v1.0.0.exe</strong>.</li>
+    <li>Follow the setup wizard. No administrator rights are required.</li>
+    <li>Optionally tick <strong>Create desktop shortcut</strong>.</li>
+    <li>Click <strong>Finish</strong> — the app will launch automatically.</li>
+  </ol>
+
+  <h3>macOS disk image</h3>
+  <ol class="steps">
+    <li>Open <strong>MIDI2TAB_v1.0.0.dmg</strong>.</li>
+    <li>Drag <strong>MIDI2TAB.app</strong> into the <strong>Applications</strong> folder shown in the window.</li>
+    <li>Launch the app from Applications or Spotlight.</li>
+  </ol>
+  <div class="note">
+    On first launch macOS may show a security warning because the app is not from the App Store.
+    Go to <strong>System Settings → Privacy &amp; Security</strong> and click <strong>Open Anyway</strong>.
+  </div>
+
+  <h3>Running from source</h3>
+  <p>Requires Python 3.9 or later:</p>
+  <pre>pip install mido reportlab Pillow customtkinter
+python main.py</pre>
+
+  <h3>System requirements</h3>
+  <ul>
+    <li>Windows 10 / 11 (64-bit) or macOS 11+</li>
+    <li>~120 MB disk space</li>
+    <li>No internet connection required</li>
+  </ul>
+</section>
+
+<!-- ── Quick Start ────────────────────────────────────────────────────────── -->
+<section id="quickstart">
+  <h2>Quick Start</h2>
+  <ol class="steps">
+    <li>Click the <strong>…</strong> button next to <em>MIDI File</em> and open a <code>.mid</code> or <code>.midi</code> file.</li>
+    <li>BPM and key are filled in automatically. Optionally type a song name and artist.</li>
+    <li>Choose an instrument preset from the <strong>Preset</strong> dropdown, or set strings and tuning manually.</li>
+    <li>Click <strong>Generate Tab</strong>.</li>
+    <li>The tablature appears in the right panel. Use <strong>Save PDF</strong>, <strong>Save Text</strong>, or <strong>Print</strong> to export it.</li>
+  </ol>
+
+  <div class="tip">
+    The tab displayed on screen uses your chosen <em>Measures per line</em> setting. When you
+    save or print, MIDI2TAB automatically reformats the tab to fit the page — you don't
+    need to adjust anything.
+  </div>
+</section>
+
+<!-- ── MIDI File ─────────────────────────────────────────────────────────── -->
+<section id="midi-file">
+  <h2>MIDI File</h2>
+  <p>
+    Click the <strong>…</strong> button to open a file browser and select a
+    <code>.mid</code> or <code>.midi</code> file. The filename appears in the
+    panel once loaded.
+  </p>
+  <p>
+    You can also use <strong>File → Open MIDI…</strong> from the menu bar or
+    press <kbd>Ctrl+O</kbd>.
+  </p>
+  <div class="note">
+    MIDI2TAB reads note data from all non-percussion tracks by default.
+    Percussion (MIDI channel 10) is always skipped. Use the
+    <strong>MIDI channel</strong> option to restrict input to a single channel.
+  </div>
+</section>
+
+<!-- ── Song Info ─────────────────────────────────────────────────────────── -->
+<section id="song-info">
+  <h2>Song Info</h2>
+  <p>
+    The Song Info section adds a header line to the top of the generated tab.
+  </p>
+
+  <table>
+    <tr><th>Field</th><th>Source</th><th>Example output</th></tr>
+    <tr><td><strong>Song</strong></td><td>You type it</td><td><code>Smoke on the Water</code></td></tr>
+    <tr><td><strong>Artist</strong></td><td>You type it</td><td><code>Deep Purple</code></td></tr>
+    <tr><td><strong>BPM</strong></td><td>Auto from MIDI tempo; editable</td><td><code>120bpm</code></td></tr>
+    <tr><td><strong>Key</strong></td><td>Auto from MIDI key signature; editable dropdown</td><td><code>Key of Gm</code></td></tr>
+  </table>
+
+  <p>
+    Only fields that contain a value appear in the header. If all four are
+    filled in, the header looks like:
+  </p>
+  <pre>Smoke on the Water, Deep Purple, 120bpm, Key of Gm</pre>
+
+  <p>
+    The BPM and Key fields are cleared and re-populated each time you open a new
+    MIDI file. Song and Artist are left as-is so you can re-generate without
+    re-typing them.
+  </p>
+
+  <div class="tip">
+    Not all MIDI files include a key signature. If the Key field stays blank
+    after loading, simply type the key yourself or leave it empty.
+  </div>
+</section>
+
+<!-- ── Presets ────────────────────────────────────────────────────────────── -->
+<section id="presets">
+  <h2>Presets</h2>
+  <p>
+    A preset stores the string count and tuning as a named configuration so you
+    can switch instruments quickly.
+  </p>
+
+  <h3>Built-in presets</h3>
+  <table>
+    <tr><th>Preset</th><th>Strings</th><th>Tuning (low → high)</th></tr>
+    <tr><td>Guitar – Standard 6-string</td><td>6</td><td>E A D G B E</td></tr>
+    <tr><td>Guitar – Drop D 6-string</td><td>6</td><td>D A D G B E</td></tr>
+    <tr><td>Guitar – Open G 6-string</td><td>6</td><td>D G D G B D</td></tr>
+    <tr><td>Guitar – Open E 6-string</td><td>6</td><td>E B E G# B E</td></tr>
+    <tr><td>Guitar – DADGAD 6-string</td><td>6</td><td>D A D G A D</td></tr>
+    <tr><td>Guitar – 7-string</td><td>7</td><td>B E A D G B E</td></tr>
+    <tr><td>Guitar – 8-string</td><td>8</td><td>F# B E A D G B E</td></tr>
+    <tr><td>Bass – Standard 4-string</td><td>4</td><td>E A D G</td></tr>
+    <tr><td>Bass – Drop D 4-string</td><td>4</td><td>D A D G</td></tr>
+    <tr><td>Bass – 5-string</td><td>5</td><td>B E A D G</td></tr>
+    <tr><td>Bass – 6-string</td><td>6</td><td>B E A D G C</td></tr>
+    <tr><td>Ukulele – Standard (GCEA)</td><td>4</td><td>G C E A</td></tr>
+  </table>
+
+  <h3>Saving a custom preset</h3>
+  <ol class="steps">
+    <li>Set the string count and tuning you want to save.</li>
+    <li>Click <strong>Save Preset…</strong>.</li>
+    <li>Enter a name and click OK.</li>
+  </ol>
+  <p>
+    Your preset appears in the dropdown immediately and is stored in
+    <code>%APPDATA%\MIDI2TAB\user_presets.json</code> so it persists across
+    sessions and app updates.
+  </p>
+
+  <h3>Deleting a preset</h3>
+  <p>
+    Select your preset from the dropdown, then click <strong>Delete</strong>.
+    Built-in presets cannot be deleted.
+  </p>
+
+  <div class="note">
+    Selecting a preset automatically updates the string count and all tuning
+    dropdowns. Changing any string or tuning manually switches the preset
+    selector to <em>Custom</em>.
+  </div>
+</section>
+
+<!-- ── Strings & Tuning ───────────────────────────────────────────────────── -->
+<section id="strings-tuning">
+  <h2>Strings &amp; Tuning</h2>
+
+  <h3>Number of strings</h3>
+  <p>
+    Use the <strong>−</strong> and <strong>+</strong> buttons to set the string
+    count from 1 to 12. The tuning row list updates instantly.
+  </p>
+
+  <h3>Tuning dropdowns</h3>
+  <p>
+    Strings are listed <strong>high → low</strong> (String 1 is the highest-
+    pitched string; the last string is the lowest). Each dropdown covers
+    <strong>C0 through B7</strong> — the full practical range of fretted instruments.
+  </p>
+  <p>
+    The fret placement algorithm uses your tuning to find the most hand-position-
+    efficient way to play each note, keeping frets between 0 (open string) and 24.
+    Notes that cannot be played on any string within this range are skipped.
+  </p>
+
+  <div class="tip">
+    If many notes are being skipped, the MIDI file's pitch range may not match
+    your tuning. Try shifting the tuning up or down by an octave, or switch to a
+    different preset.
+  </div>
+</section>
+
+<!-- ── Options ────────────────────────────────────────────────────────────── -->
+<section id="options">
+  <h2>Options</h2>
+
+  <table>
+    <tr><th>Option</th><th>Default</th><th>Description</th></tr>
+    <tr>
+      <td><strong>Beats per measure</strong></td>
+      <td>4</td>
+      <td>Sets the time signature denominator for the tab grid (usually 4 for 4/4 time). If the MIDI is in 3/4, set this to 3.</td>
+    </tr>
+    <tr>
+      <td><strong>Measures per line</strong></td>
+      <td>4</td>
+      <td>How many measures appear in each line of the on-screen tab. Saves and prints always reformat to fit the page width, regardless of this setting.</td>
+    </tr>
+    <tr>
+      <td><strong>MIDI channel</strong></td>
+      <td>All</td>
+      <td>Restrict note input to a single MIDI channel (0–15). Useful when a file contains multiple instruments on separate channels.</td>
+    </tr>
+  </table>
+</section>
+
+<!-- ── Tab Display ────────────────────────────────────────────────────────── -->
+<section id="tab-display">
+  <h2>Tab Display</h2>
+  <p>
+    After clicking <strong>Generate Tab</strong>, the tablature appears in the
+    main panel in monospace font. Each system (set of string rows) represents
+    one line of music.
+  </p>
+  <p>
+    The display is scrollable both vertically and horizontally. Use your mouse
+    wheel to scroll vertically, or the scrollbar at the bottom for horizontal
+    scrolling.
+  </p>
+  <div class="note">
+    The on-screen display uses the <em>Measures per line</em> setting from the
+    Options panel. PDF and text exports are automatically reformatted to fit the
+    page — they may show a different number of measures per line.
+  </div>
+</section>
+
+<!-- ── Save as Text ───────────────────────────────────────────────────────── -->
+<section id="save-text">
+  <h2>Save as Text</h2>
+  <p>
+    Click <strong>Save Text</strong> (or <strong>File → Save as Text…</strong> /
+    <kbd>Ctrl+S</kbd>) to save the tab as a plain <code>.txt</code> file.
+  </p>
+  <p>
+    The text file is formatted to fit within <strong>90 characters per line</strong>
+    (equivalent to 10 pt Courier on 8.5×11" paper with 0.5" margins), so it
+    prints cleanly from any text editor.
+  </p>
+</section>
+
+<!-- ── Save as PDF ────────────────────────────────────────────────────────── -->
+<section id="save-pdf">
+  <h2>Save as PDF</h2>
+  <p>
+    Click <strong>Save PDF</strong> (or <strong>File → Save as PDF…</strong> /
+    <kbd>Ctrl+Shift+S</kbd>) to export the tab as a <code>.pdf</code> file.
+  </p>
+  <p>
+    MIDI2TAB automatically:
+  </p>
+  <ul>
+    <li>Fits the tab to <strong>8.5 × 11"</strong> paper with <strong>0.5" margins</strong></li>
+    <li>Chooses the largest font size (up to 9 pt) where every line still fits</li>
+    <li>Adds page breaks as needed for long songs</li>
+    <li>Uses the Song Name as the PDF document title if one is entered</li>
+  </ul>
+</section>
+
+<!-- ── Print ─────────────────────────────────────────────────────────────── -->
+<section id="print">
+  <h2>Print</h2>
+  <p>
+    Click <strong>Print</strong> (or <strong>File → Print…</strong> /
+    <kbd>Ctrl+P</kbd>) to send the tab directly to your default printer.
+  </p>
+  <p>
+    MIDI2TAB generates a temporary PDF and sends it to the system print dialog.
+    If the automatic print dialog does not open, the PDF will open in your
+    default PDF viewer instead — use that application's print function.
+  </p>
+</section>
+
+<!-- ── Reading the Tab ───────────────────────────────────────────────────── -->
+<section id="tab-format">
+  <h2>Reading the Tab</h2>
+
+  <h3>Basic layout</h3>
+  <p>
+    Each system shows all strings simultaneously, with the highest string at the
+    top and the lowest at the bottom:
+  </p>
+  <pre>E5|--0---------5--------|--3-----|
+B4|-----3-----------3---|--------|
+G4|--------2------------|--0-----|
+D4|---------------------|--------|
+A3|---------------------|--------|
+E3|---------------------|--------|</pre>
+
+  <p>
+    The label on the left of each row is the open-string note. Numbers in the
+    row represent fret numbers (0 = open string, 12 = 12th fret, etc.).
+    Dashes represent silence or held notes.
+  </p>
+
+  <h3>Header</h3>
+  <p>
+    If Song Info fields are filled in, a header appears above the first system:
+  </p>
+  <pre>My Song, Artist Name, 120bpm, Key of Am
+6 String Guitar | Standard | EADGBE</pre>
+
+  <p>
+    The second line shows the instrument name, preset tuning name, and all open-string
+    notes listed from low to high.
+  </p>
+
+  <h3>Silent sections</h3>
+  <p>
+    Consecutive empty measures (no notes) are collapsed into a single annotation
+    line rather than showing rows of dashes:
+  </p>
+  <pre>E5|--0-----|
+...
+
+Silent for 8 Measures
+
+E5|--5-----|
+...</pre>
+
+  <h3>Bar lines</h3>
+  <p>
+    A vertical bar (<code>|</code>) marks the boundary between measures.
+    Each measure contains <em>beats × 4</em> grid slots (16th-note resolution).
+  </p>
+
+  <h3>Two-digit frets</h3>
+  <p>
+    Fret numbers above 9 use two characters. Each grid slot is 3 characters wide,
+    so a fret of <code>12</code> is written as <code>12-</code>.
+  </p>
+</section>
+
+<!-- ── Data & Files ───────────────────────────────────────────────────────── -->
+<section id="data-location">
+  <h2>Data &amp; Files</h2>
+
+  <table>
+    <tr><th>File</th><th>Location</th><th>Contents</th></tr>
+    <tr>
+      <td><code>user_presets.json</code></td>
+      <td><code>%APPDATA%\MIDI2TAB\</code></td>
+      <td>Your saved instrument presets. Safe to back up or copy between machines.</td>
+    </tr>
+  </table>
+
+  <p>
+    The application itself stores no other data. MIDI files you open are read
+    but never modified. Generated tab text and PDFs are only saved when you
+    explicitly click Save or Print.
+  </p>
+
+  <h3>Backing up presets</h3>
+  <p>
+    Copy <code>%APPDATA%\MIDI2TAB\user_presets.json</code> to a safe location.
+    To restore, place the file back in the same folder before launching the app.
+  </p>
+
+  <h3>Uninstalling</h3>
+  <p>
+    Use <strong>Add or Remove Programs</strong> to uninstall MIDI2TAB. The
+    uninstaller removes the application files but does <strong>not</strong>
+    delete your presets in <code>%APPDATA%\MIDI2TAB</code>. Delete that folder
+    manually if you want a completely clean removal.
+  </p>
+</section>
+
+<!-- ── Troubleshooting ───────────────────────────────────────────────────── -->
+<section id="troubleshooting">
+  <h2>Troubleshooting</h2>
+
+  <h3>No notes found after generating</h3>
+  <ul>
+    <li>Check the <strong>MIDI channel</strong> setting — if a specific channel is selected, switch to <strong>All</strong>.</li>
+    <li>Make sure the MIDI file actually contains note data on non-percussion channels. Some files contain only tempo/time signature data.</li>
+  </ul>
+
+  <h3>Many notes are skipped</h3>
+  <p>
+    The status bar shows how many notes were out of range. This usually means
+    the MIDI pitch range doesn't overlap with your tuning. Try:
+  </p>
+  <ul>
+    <li>Switching to a different preset</li>
+    <li>Lowering the tuning by an octave (e.g., E5 → E4)</li>
+    <li>Checking if the MIDI is for a transposing instrument (e.g., bass guitar sounding an octave lower than written)</li>
+  </ul>
+
+  <h3>The tab looks wrong — chords are split across beats</h3>
+  <p>
+    MIDI files sometimes quantize chords slightly imprecisely. MIDI2TAB uses
+    16th-note grid quantization to group simultaneous notes. If notes that should
+    sound together are appearing on different beats, the MIDI file's timing may
+    be looser than 1/16th note — this is normal for recorded (non-quantized) MIDI.
+  </p>
+
+  <h3>BPM or Key is wrong after loading</h3>
+  <p>
+    Simply type the correct value into the BPM or Key field. The auto-populated
+    values come directly from the MIDI file's metadata and can always be
+    overridden.
+  </p>
+
+  <h3>PDF is cut off or text is too small</h3>
+  <p>
+    MIDI2TAB automatically picks the largest font that fits all lines within the
+    page width (minimum 6 pt, maximum 9 pt). If the font looks very small, the
+    tab lines are very long — try reducing <strong>Beats per measure</strong>
+    to shorten each measure, or use a preset with fewer strings.
+  </p>
+
+  <h3>My saved presets are not appearing</h3>
+  <p>
+    Presets are stored in <code>%APPDATA%\MIDI2TAB\user_presets.json</code>.
+    Check that this file exists and is valid JSON. If it was created by an older
+    version of the app (before v1.0.0), it may be in a different location —
+    copy its contents and re-save each preset from within the app.
+  </p>
+
+  <h3>The app won't launch on macOS</h3>
+  <p>
+    macOS Gatekeeper blocks apps that are not notarized with Apple. To open:
+  </p>
+  <ol class="steps">
+    <li>Go to <strong>System Settings → Privacy &amp; Security</strong>.</li>
+    <li>Scroll down to the security section and click <strong>Open Anyway</strong> next to the MIDI2TAB message.</li>
+    <li>Confirm by clicking <strong>Open</strong> in the dialog.</li>
+  </ol>
+
+  <div class="tip">
+    For any issue not listed here, run the app from source in a terminal
+    (<code>python main.py</code>) to see Python error output directly.
+  </div>
+</section>
+
+</main>
+</body>
+</html>

@@ -13,8 +13,10 @@ macOS (from project root):
 
 import os
 import sys
+import customtkinter
 
 project_root = os.path.dirname(SPECPATH)   # parent of build/
+ctk_root     = os.path.dirname(customtkinter.__file__)  # CustomTkinter assets
 
 # Platform-specific icon format
 if sys.platform == "darwin":
@@ -29,11 +31,16 @@ a = Analysis(
     pathex=[project_root],
     binaries=[],
     datas=[
-        # Bundle the icon so it can be loaded at runtime for the window title bar.
-        # The tuple is (source_path, dest_folder_inside_bundle).
+        # App icon (loaded at runtime for the window title bar)
         (os.path.join(project_root, "assets", "icon.ico"), "assets"),
+        # HTML manual (opened via webbrowser when Help is clicked)
+        (os.path.join(project_root, "docs", "manual.html"), "docs"),
+        # CustomTkinter themes and image assets (required at runtime)
+        (ctk_root, "customtkinter"),
     ],
     hiddenimports=[
+        # customtkinter UI framework
+        "customtkinter",
         # mido file I/O (no playback backend needed)
         "mido",
         "mido.midifiles",
