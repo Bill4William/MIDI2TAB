@@ -205,6 +205,9 @@
     <li><a href="#save-pdf">Save as PDF</a></li>
     <li><a href="#print">Print</a></li>
 
+    <li class="section-head">Tools</li>
+    <li><a href="#fretboard">Fretboard Explorer</a></li>
+
     <li class="section-head">Reference</li>
     <li><a href="#tab-format">Reading the Tab</a></li>
     <li><a href="#data-location">Data &amp; Files</a></li>
@@ -513,10 +516,96 @@ python main.py</pre>
     <kbd>Ctrl+P</kbd>) to send the tab directly to your default printer.
   </p>
   <p>
-    MIDI2TAB generates a temporary PDF and sends it to the system print dialog.
-    If the automatic print dialog does not open, the PDF will open in your
-    default PDF viewer instead — use that application's print function.
+    MIDI2TAB generates a temporary PDF and sends it to your default printer
+    (Windows uses the system print command; macOS and Linux use <code>lp</code>).
+    If that isn't possible — for example no default printer is set — the PDF opens
+    in your default viewer instead (Preview on macOS); use its print function.
   </p>
+</section>
+
+<!-- ── Fretboard Explorer ────────────────────────────────────────────────── -->
+<section id="fretboard">
+  <h2>Fretboard Explorer</h2>
+  <p>
+    Open it with <strong>Tools → Fretboard Explorer…</strong>, <kbd>Ctrl+F</kbd>,
+    or the <strong>Fretboard Explorer</strong> button in the sidebar. It shows the
+    neck from the open strings to the 12th fret for any string count (1–12) and
+    any tuning, and draws scales, modes and chords on it.
+  </p>
+
+  <h3>Strings &amp; Tuning</h3>
+  <ul>
+    <li><strong>− / +</strong> removes or adds a string (new strings are added a fourth below the lowest).</li>
+    <li><strong>▲ / ▼</strong> under each string shifts that string by one semitone; <strong>All strings</strong> shifts the whole tuning.</li>
+    <li><strong>Presets…</strong> loads any built-in or saved MIDI2TAB preset.</li>
+    <li><strong>⇩ From MIDI2TAB</strong> copies the main window's tuning in; <strong>⇧ To MIDI2TAB</strong> sends this tuning back to the main tuning panel.</li>
+  </ul>
+
+  <h3>Scale &amp; Mode</h3>
+  <p>
+    Pick a root, a scale family and one of its modes. Families include Major
+    (all seven church modes), Harmonic Minor, Melodic Minor, Harmonic Major and
+    Double Harmonic (each with all seven modes, e.g. Phrygian Dominant, Lydian
+    Dominant, Altered), Pentatonic (all five modes), Blues, Major Blues, Bebop,
+    Hirajoshi, Whole Tone, Diminished, Augmented and Chromatic. Notes are spelled
+    correctly for the key (F major shows B♭, not A♯).
+  </p>
+  <ul>
+    <li><strong>Notes / Degrees</strong> switches the labels between note names and scale degrees (1, ♭3, ♯4…).</li>
+    <li><strong>All notes</strong> shows the notes outside the scale as faint labels.</li>
+    <li><strong>Song key</strong> uses the Key field from Song Info.</li>
+    <li><strong>Detect from MIDI</strong> estimates the key from the loaded MIDI file's notes.</li>
+    <li><strong>Chords in key</strong> lists the chords built on each degree of a seven-note scale (tick <strong>7ths</strong> for seventh chords). Click one to show it.</li>
+  </ul>
+
+  <h3>Chord</h3>
+  <p>
+    Choose a root and chord type (triads, sus, 6ths, 7ths, 9ths, 11ths, 13ths and
+    altered dominants). MIDI2TAB searches for playable voicings in the current
+    tuning and lists them from the nut upward. Use <strong>◀ / ▶</strong> (or the
+    arrow keys) to step through them. The voicing is drawn in yellow, with the chord
+    root in orange and muted strings marked <strong>×</strong>.
+  </p>
+  <ul>
+    <li><strong>All chord tones</strong> rings every chord tone on the neck.</li>
+    <li><strong>Root in bass</strong> off allows inversions (e.g. C/G).</li>
+    <li><strong>Max stretch</strong> sets how many frets one voicing may span.</li>
+    <li><strong>Copy tab</strong> copies the current voicing to the clipboard as a tab snippet.</li>
+  </ul>
+
+  <h3>Working with the generated tab</h3>
+  <p>
+    Tick <strong>Show generated tab</strong> to mark every fret position used by the
+    tab in the main window, with a purple badge counting how often each one is played.
+    This needs the same tuning as the tab. Notes above the 12th fret are counted in
+    the status line but not drawn.
+  </p>
+
+  <h3>Printing scales and chords together</h3>
+  <p>
+    Build a reference sheet of as many scales and chords as you like, then save it as
+    one PDF or print it:
+  </p>
+  <ul>
+    <li><strong>+ Sheet</strong> in the Scale &amp; Mode card adds the current scale as a full neck diagram (open to 12th fret), labelled with notes or degrees to match the <strong>Notes / Degrees</strong> switch.</li>
+    <li><strong>+ Sheet</strong> in the Chord card adds the voicing on screen as a chord box.</li>
+    <li><strong>+ All to sheet</strong> next to <em>Chords in key</em> adds a chord box for every chord in the key (triads, or 7ths when ticked), using the most practical voicing of each.</li>
+    <li><strong>Print Sheet (N)…</strong> opens the sheet: set a title, reorder items with <strong>▲ Up / ▼ Down</strong> (multi-select works), <strong>Remove</strong> (or <kbd>Delete</kbd>) or <strong>Clear all</strong>, then <strong>Save PDF…</strong> or <strong>Print</strong>.</li>
+  </ul>
+  <p>
+    On the page, scales run full width and chords sit four to a row, in the order you set.
+    Pages break automatically. Root notes are orange, chord boxes show × for muted and ○ for
+    open strings, and chords played above the 5th fret show a starting-fret marker
+    (e.g. <em>7fr</em>). Each item keeps the tuning it was added with, so one sheet can mix
+    guitar and bass diagrams. Left-handed view mirrors the printed diagrams too.
+  </p>
+
+  <h3>Other controls</h3>
+  <ul>
+    <li>Click any note to highlight that note everywhere on the neck; click again or press <kbd>Esc</kbd> to clear.</li>
+    <li><strong>Left-handed</strong> mirrors the neck.</li>
+    <li><strong>⟲</strong> resets to C major and hides the chord.</li>
+  </ul>
 </section>
 
 <!-- ── Reading the Tab ───────────────────────────────────────────────────── -->
