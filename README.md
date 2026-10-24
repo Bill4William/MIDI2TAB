@@ -23,6 +23,12 @@ Convert MIDI files to guitar and bass tablature — with a clean desktop GUI, PD
 - **Silent measure compression** — empty measures are collapsed to `Silent for N Measures` instead of blank dashes
 - **Page-safe output** — tab is automatically reformatted to fit 8.5×11" with 0.5" margins (no cutoff)
 - **Export options** — Save as TXT, Save as PDF, or Print directly from the app
+- **Fretboard Explorer** (Tools → Fretboard Explorer, `Ctrl+F`) — interactive neck from open to the 12th fret for any string count (1–12) and tuning:
+  - Scales and modes: all modes of Major, Harmonic Minor, Melodic Minor, Harmonic Major, Double Harmonic and Pentatonic, plus Blues, Bebop, Whole Tone, Diminished, Augmented and more — spelled correctly for the key
+  - Note names or scale degrees, click-to-highlight any note across the neck, left-handed view
+  - Chords in key (triads or 7ths), one click to show each
+  - Chord voicing finder for any tuning (28 chord types), stepping through shapes up the neck, with optional inversions and max stretch
+  - Shares tuning with the main window, sets the scale from the song key or detects the key from the MIDI file, and overlays the generated tab's fret positions
 
 ---
 
@@ -45,7 +51,7 @@ git clone https://github.com/Bill4William/MIDI2TAB.git
 cd MIDI2TAB
 
 # Install dependencies
-pip install mido reportlab Pillow
+pip install -r requirements.txt
 
 # Run the app
 python main.py
@@ -75,7 +81,7 @@ To download it:
 
 To build locally on a Mac:
 ```bash
-pip3 install mido reportlab Pillow pyinstaller
+pip3 install -r requirements.txt Pillow pyinstaller
 bash build/build_mac.sh
 ```
 Output: `installer_output/MIDI2TAB_v1.0.0.dmg`
@@ -88,7 +94,7 @@ Output: `installer_output/MIDI2TAB_v1.0.0.dmg`
 python -m pytest tests/ -v
 ```
 
-55 tests covering note conversion, fret placement, tab formatting, MIDI parsing, and PDF export.
+76 tests covering note conversion, fret placement, tab formatting, MIDI parsing, PDF export, and the Fretboard Explorer theory engine (modes, spelling, diatonic chords, chord voicings, key detection).
 
 ---
 
@@ -100,6 +106,8 @@ MIDI2TAB/
 ├── requirements.txt
 ├── src/
 │   ├── gui.py               # Main application window (tkinter)
+│   ├── fretboard_window.py  # Fretboard Explorer window
+│   ├── music_theory.py      # Scales, modes, chords, voicing search, key detection
 │   ├── midi_parser.py       # MIDI file parsing (mido)
 │   ├── tab_generator.py     # Note-to-fret placement algorithm
 │   ├── tab_formatter.py     # ASCII tab rendering
@@ -112,7 +120,8 @@ MIDI2TAB/
 │   ├── build_mac.sh         # macOS build script
 │   └── installer.iss        # Inno Setup script (Windows installer)
 ├── tests/
-│   └── test_core.py         # Unit tests
+│   ├── test_core.py         # Unit tests
+│   └── test_music_theory.py # Fretboard Explorer theory tests
 └── .github/
     └── workflows/
         └── build-mac.yml    # GitHub Actions macOS build

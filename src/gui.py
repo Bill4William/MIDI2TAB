@@ -12,6 +12,7 @@ from typing import List, Optional
 
 import customtkinter as ctk
 
+from .fretboard_window import FretboardWindow
 from .midi_parser import parse_midi
 from .pdf_exporter import export_pdf
 from .tab_formatter import (
@@ -125,6 +126,7 @@ class App(ctk.CTk):
         self._artist_var    = tk.StringVar()
         self._bpm_var       = tk.StringVar()
         self._key_var       = tk.StringVar()
+        self._fretboard: Optional[FretboardWindow] = None
 
         # ── Layout ────────────────────────────────────────────────────────
         self.grid_columnconfigure(1, weight=1)
@@ -153,6 +155,11 @@ class App(ctk.CTk):
         file_.add_separator()
         file_.add_command(label="Exit",                   command=self.quit)
 
+        tools = tk.Menu(bar, tearoff=0)
+        bar.add_cascade(label="Tools", menu=tools)
+        tools.add_command(label="Fretboard Explorer…\tCtrl+F",
+                          command=self._open_fretboard)
+
         help_ = tk.Menu(bar, tearoff=0)
         bar.add_cascade(label="Help", menu=help_)
         help_.add_command(label="Help / Manual",    command=self._open_manual)
@@ -162,6 +169,7 @@ class App(ctk.CTk):
         self.bind_all("<Control-s>", lambda _: self._save_text())
         self.bind_all("<Control-S>", lambda _: self._save_pdf())
         self.bind_all("<Control-p>", lambda _: self._print_tab())
+        self.bind_all("<Control-f>", lambda _: self._open_fretboard())
 
     # ── Sidebar ───────────────────────────────────────────────────────────────
 
@@ -209,6 +217,15 @@ class App(ctk.CTk):
         ).grid(row=5, column=0, padx=12, pady=(0, 4), sticky="ew")
 
         ctk.CTkButton(
+            sidebar, text="Fretboard Explorer",
+            font=ctk.CTkFont(size=12),
+            height=32,
+            fg_color=("gray75", "gray25"),
+            hover_color=("gray65", "gray30"),
+            command=self._open_fretboard,
+        ).grid(row=6, column=0, padx=12, pady=(0, 4), sticky="ew")
+
+        ctk.CTkButton(
             sidebar, text="? Help / Manual", anchor="w",
             font=ctk.CTkFont(size=12),
             fg_color="transparent",
@@ -216,13 +233,13 @@ class App(ctk.CTk):
             text_color=("gray40", "gray60"),
             corner_radius=8,
             command=self._open_manual,
-        ).grid(row=6, column=0, padx=10, pady=(0, 2), sticky="ew")
+        ).grid(row=7, column=0, padx=10, pady=(0, 2), sticky="ew")
 
         ctk.CTkLabel(
             sidebar, text="v1.0.0",
             font=ctk.CTkFont(size=10),
             text_color=("gray60", "gray50"),
-        ).grid(row=7, column=0, padx=20, pady=(0, 14), sticky="w")
+        ).grid(row=8, column=0, padx=20, pady=(0, 14), sticky="w")
 
     def _build_settings(self, f: ctk.CTkScrollableFrame) -> None:
 
@@ -646,6 +663,8 @@ class App(ctk.CTk):
             )
             self._tab_text = tab
             self._show_tab(tab)
+            if self._fretboard is not None and self._fretboard.winfo_exists():
+                self._fretboard.on_tab_generated()
 
             skipped = len(notes) - len(placed)
             msg = f"Generated {len(placed)} note(s)."
@@ -742,6 +761,42 @@ class App(ctk.CTk):
             except Exception as exc:
                 messagebox.showerror("Print Error", str(exc))
 
+    # ── Fretboard Explorer ────────────────────────────────────────────────────
+
+    def _open_fretboard(self) -> None:
+        if self._fretboard is not None and self._fretboard.winfo_exists():
+            self._fretboard.deiconify()
+            self._fretboard.lift()
+            self._fretboard.focus_force()
+            return
+        self._fretboard = FretboardWindow(
+            self,
+            get_tuning=lambda: [v.get() for v in self._tuning_vars],
+            set_tuning=self._set_tuning_from_fretboard,
+            get_presets=lambda: {k: v for k, v in self._all_presets().items() if v},
+            get_song_key=self._key_var.get,
+            get_midi_notes=self._midi_notes_for_key_detection,
+            get_tab=lambda: (self._tuning_pitches, self._placed)
+            if self._placed else None,
+        )
+
+    def _set_tuning_from_fretboard(self, notes: List[str]) -> None:
+        self._num_strings.set(len(notes))
+        self._rebuild_tuning_rows(notes)
+        self._preset_var.set("Custom")
+        self._status.set("Tuning updated from Fretboard Explorer.")
+
+    def _midi_notes_for_key_detection(self) -> Optional[List[tuple]]:
+        if not self._midi_path:
+            return None
+        channel_str = self._channel_var.get()
+        channel_filter = None if channel_str == "All" else int(channel_str)
+        try:
+            notes, *_ = parse_midi(self._midi_path, channel_filter)
+        except Exception:
+            return None
+        return [(n.pitch, float(n.duration_ticks)) for n in notes]
+
     def _open_manual(self) -> None:
         path = _resource_path("docs/manual.html")
         webbrowser.open(f"file:///{path.replace(os.sep, '/')}")
@@ -754,6 +809,7 @@ class App(ctk.CTk):
             "• Custom string counts and tunings\n"
             "• Save and load your own instrument presets\n"
             "• ASCII display + PDF export\n"
-            "• Print directly from the app\n\n"
+            "• Print directly from the app\n"
+            "• Fretboard Explorer: scales, modes & chords for any tuning\n\n"
             "Supported formats: .mid, .midi",
         )
