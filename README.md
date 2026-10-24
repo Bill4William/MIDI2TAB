@@ -98,6 +98,19 @@ Output: `installer_output/MIDI2TAB_v1.0.0.dmg`
 
 ---
 
+### Publishing a release
+
+Releases are automatic. The **Release** workflow reads the version from `MyAppVersion` in `build/installer.iss`; whenever `main` carries a version that has no GitHub Release yet, it builds both installers and publishes release `vX.Y.Z` with the `.exe` and `.dmg` attached (downloadable without a GitHub account).
+
+To release a new version, change the version number in all of these, then merge to `main`:
+
+- `build/installer.iss` (`MyAppVersion`), the source of truth
+- `src/gui.py` (sidebar label and About box)
+- `build/MIDI2TAB.spec` (`CFBundleShortVersionString`, `CFBundleVersion`)
+- `build/build_mac.sh` (`VERSION`)
+
+The workflow refuses to publish if any of them disagree. Pull requests run the whole release build without publishing.
+
 ## Running Tests
 
 ```bash
