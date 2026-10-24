@@ -2,11 +2,13 @@ name: Build macOS Installer
 
 # Runs on every push to main, any version tag (v1.0.0, etc.),
 # or manually from the Actions tab (useful for downloading a one-off build).
+# release.yml also calls it to build the .dmg for automatic releases.
 on:
   push:
     branches: [main]
     tags: ["v*"]
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: write   # needed only to attach the .dmg to tag releases
@@ -14,7 +16,7 @@ permissions:
 # Tag builds of both installer workflows share one queue so they don't race
 # to create the same GitHub Release; other builds run independently.
 concurrency:
-  group: ${{ startsWith(github.ref, 'refs/tags/') && format('release-{0}', github.ref) || github.run_id }}
+  group: ${{ startsWith(github.ref, 'refs/tags/') && format('release-{0}', github.ref) || format('macos-{0}', github.run_id) }}
   cancel-in-progress: false
 
 jobs:
@@ -53,6 +55,7 @@ jobs:
         run: |
           mkdir -p installer_output
           TMP_DIR=$(mktemp -d)
+          VERSION=$(sed -n 's/^#define MyAppVersion *"\(.*\)"/\1/p' build/installer.iss | tr -d '\r')
 
           # Copy .app and add an Applications alias for drag-and-drop install
           cp -r dist/MIDI2TAB.app "$TMP_DIR/"
@@ -63,7 +66,7 @@ jobs:
             -srcfolder "$TMP_DIR" \
             -ov \
             -format UDZO \
-            installer_output/MIDI2TAB_v1.0.0.dmg
+            "installer_output/MIDI2TAB_v${VERSION}.dmg"
 
           rm -rf "$TMP_DIR"
 
@@ -72,7 +75,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: MIDI2TAB-macOS
-          path: installer_output/MIDI2TAB_v1.0.0.dmg
+          path: installer_output/*.dmg
+          if-no-files-found: error
           retention-days: 30
 
       # ---- 8. Attach to GitHub Release (tag builds only) --------------------
@@ -80,4 +84,4 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: installer_output/MIDI2TAB_v1.0.0.dmg
+          files: installer_output/*.dmg
