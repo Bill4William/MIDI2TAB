@@ -36,12 +36,12 @@ from .music_theory import (
     spell_chord,
     spell_scale,
 )
+from .pdf_exporter import open_for_print
 from .sheet_exporter import (
     ChordItem,
     ScaleItem,
     SheetItem,
     export_sheet,
-    open_for_print,
 )
 from .tab_generator import parse_note_name
 

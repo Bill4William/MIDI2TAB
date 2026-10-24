@@ -8,9 +8,6 @@ the user chose, and pages break automatically.
 
 from __future__ import annotations
 
-import os
-import subprocess
-import sys
 from dataclasses import dataclass, field
 from typing import Dict, List, Sequence, Tuple, Union
 
@@ -238,25 +235,3 @@ def export_sheet(items: Sequence[SheetItem], output_path: str,
 
     c.save()
     return pages
-
-
-def open_for_print(path: str) -> str:
-    """
-    Hand a PDF to the OS for printing. Returns a short status message.
-    Windows prints directly; macOS/Linux send it to `lp` when available,
-    otherwise open it in the default viewer.
-    """
-    if sys.platform == "win32":
-        try:
-            os.startfile(path, "print")          # type: ignore[attr-defined]
-            return "Sent to printer."
-        except OSError:
-            os.startfile(path)                   # type: ignore[attr-defined]
-            return "Opened PDF — use File › Print in your PDF viewer."
-    try:
-        subprocess.run(["lp", path], check=True, capture_output=True, timeout=20)
-        return "Sent to printer."
-    except (OSError, subprocess.SubprocessError):
-        opener = "open" if sys.platform == "darwin" else "xdg-open"
-        subprocess.Popen([opener, path])
-        return "Opened PDF — use File › Print in your PDF viewer."

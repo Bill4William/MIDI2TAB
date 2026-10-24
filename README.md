@@ -22,7 +22,7 @@ Convert MIDI files to guitar and bass tablature — with a clean desktop GUI, PD
 - **Instrument info line** — shows string count, tuning name, and notes low-to-high (e.g. `6 String Guitar | Standard | EADGBE`)
 - **Silent measure compression** — empty measures are collapsed to `Silent for N Measures` instead of blank dashes
 - **Page-safe output** — tab is automatically reformatted to fit 8.5×11" with 0.5" margins (no cutoff)
-- **Export options** — Save as TXT, Save as PDF, or Print directly from the app
+- **Export options** — Save as TXT, Save as PDF, or Print directly from the app (Windows, macOS, Linux)
 - **Fretboard Explorer** (Tools → Fretboard Explorer, `Ctrl+F`) — interactive neck from open to the 12th fret for any string count (1–12) and tuning:
   - Scales and modes: all modes of Major, Harmonic Minor, Melodic Minor, Harmonic Major, Double Harmonic and Pentatonic, plus Blues, Bebop, Whole Tone, Diminished, Augmented and more — spelled correctly for the key
   - Note names or scale degrees, click-to-highlight any note across the neck, left-handed view
@@ -95,7 +95,7 @@ Output: `installer_output/MIDI2TAB_v1.0.0.dmg`
 python -m pytest tests/ -v
 ```
 
-82 tests covering note conversion, fret placement, tab formatting, MIDI parsing, PDF export, the Fretboard Explorer theory engine (modes, spelling, diatonic chords, chord voicings, key detection), and scale/chord sheet export.
+86 tests covering note conversion, fret placement, tab formatting, MIDI parsing, PDF export, the Fretboard Explorer theory engine (modes, spelling, diatonic chords, chord voicings, key detection), scale/chord sheet export, and cross-platform printing.
 
 ---
 

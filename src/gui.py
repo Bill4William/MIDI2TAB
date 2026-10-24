@@ -14,7 +14,7 @@ import customtkinter as ctk
 
 from .fretboard_window import FretboardWindow
 from .midi_parser import parse_midi
-from .pdf_exporter import export_pdf
+from .pdf_exporter import export_pdf, open_for_print
 from .tab_formatter import (
     PDF_MAX_CHARS,
     TXT_MAX_CHARS,
@@ -752,14 +752,9 @@ class App(ctk.CTk):
         )
         export_pdf(self._reformat_for_width(PDF_MAX_CHARS), tmp_path, title=title)
         try:
-            os.startfile(tmp_path, "print")
-            self._status.set("Sent to printer.")
-        except Exception:
-            try:
-                os.startfile(tmp_path)
-                self._status.set("Opened PDF — use File › Print in your PDF viewer.")
-            except Exception as exc:
-                messagebox.showerror("Print Error", str(exc))
+            self._status.set(open_for_print(tmp_path))
+        except Exception as exc:
+            messagebox.showerror("Print Error", str(exc))
 
     # ── Fretboard Explorer ────────────────────────────────────────────────────
 
