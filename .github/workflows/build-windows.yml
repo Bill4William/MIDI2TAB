@@ -1,0 +1,90 @@
+name: Build Windows Installer
+
+# Runs on every push to main, any version tag (v1.0.0, etc.), pull requests
+# into main (tests + build check), or manually from the Actions tab.
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed only to attach the installer to tag releases
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      # ---- 1. Source code ---------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ---- 2. Python --------------------------------------------------------
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # ---- 3. Dependencies --------------------------------------------------
+      - name: Install Python dependencies
+        run: pip install -r requirements.txt Pillow pyinstaller pytest
+
+      # ---- 4. Tests ---------------------------------------------------------
+      - name: Run unit tests
+        run: python -m pytest tests -q
+
+      # ---- 5. Icons ---------------------------------------------------------
+      - name: Generate icons
+        run: python assets/create_icon.py
+
+      # ---- 6. Bundle --------------------------------------------------------
+      - name: Build with PyInstaller
+        run: python -m PyInstaller build/MIDI2TAB.spec --clean --noconfirm
+
+      # ---- 7. Smoke test: the bundled app must start and stay up ------------
+      - name: Launch bundled app
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath "dist\MIDI2TAB\MIDI2TAB.exe" -PassThru
+          Start-Sleep -Seconds 15
+          if ($p.HasExited) {
+            Write-Error "MIDI2TAB.exe exited early with code $($p.ExitCode)"
+            exit 1
+          }
+          Write-Host "MIDI2TAB.exe is running (PID $($p.Id)); stopping it."
+          Stop-Process -Id $p.Id -Force
+
+      # ---- 8. Installer -----------------------------------------------------
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Compile installer with Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { Write-Error "ISCC.exe not found"; exit 1 }
+          New-Item -ItemType Directory -Force installer_output | Out-Null
+          & $iscc build\installer.iss
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      # ---- 9. Upload artifact (all builds) ----------------------------------
+      - name: Upload installer as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MIDI2TAB-Windows
+          path: installer_output/MIDI2TAB_Setup_v1.0.0.exe
+          if-no-files-found: error
+          retention-days: 30
+
+      # ---- 10. Attach to GitHub Release (tag builds only) -------------------
+      - name: Attach installer to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer_output/MIDI2TAB_Setup_v1.0.0.exe
