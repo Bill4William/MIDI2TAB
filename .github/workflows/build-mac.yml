@@ -8,6 +8,15 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+permissions:
+  contents: write   # needed only to attach the .dmg to tag releases
+
+# Tag builds of both installer workflows share one queue so they don't race
+# to create the same GitHub Release; other builds run independently.
+concurrency:
+  group: ${{ startsWith(github.ref, 'refs/tags/') && format('release-{0}', github.ref) || github.run_id }}
+  cancel-in-progress: false
+
 jobs:
   build-macos:
     # macos-15-intel = Intel x86_64 -- the built .app runs on every Mac
