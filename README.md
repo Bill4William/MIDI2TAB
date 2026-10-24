@@ -64,6 +64,15 @@ python main.py
 
 ### Windows installer
 
+No Windows PC required — every push to `main` automatically builds the installer via GitHub Actions (it also runs the tests and checks that the built app launches).
+
+To download it:
+1. Go to the [Actions tab](../../actions)
+2. Click the latest **Build Windows Installer** run
+3. Download the **MIDI2TAB-Windows** artifact
+
+To build locally on Windows:
+
 1. Install [Inno Setup 6](https://jrsoftware.org/isinfo.php)
 2. Run the build script:
    ```
