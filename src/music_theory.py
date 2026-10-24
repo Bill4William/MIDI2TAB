@@ -261,7 +261,9 @@ def spell_chord(root_pc: int, chord: ChordType,
         num = int("".join(ch for ch in lbl if ch.isdigit()))
         pc = (root_pc + iv) % 12
         name, acc = _spell(root_letter + num - 1, pc)
-        out[pc] = name if abs(acc) <= 2 else SHARP_NAMES[pc]
+        # Double accidentals are correct on paper but hard to read on a
+        # fretboard (E7#9's F## is played and named as G), so simplify them.
+        out[pc] = name if abs(acc) <= 1 else default_root_name(pc)
     return out
 
 
@@ -419,6 +421,12 @@ def find_voicings(tuning: Sequence[int], root_pc: int, chord: ChordType,
                     sum(1 for f in fretted if f != fmin)
                 if fingers > 4:
                     return
+                if len(fretted) > 4:
+                    # Needs a barre at fmin: strings it covers can't ring open.
+                    barred = [i for i in played if low_to_high[i] == fmin]
+                    if any(low_to_high[i] == 0
+                           for i in range(barred[0], barred[-1] + 1)):
+                        return
             elif lo != 0:
                 return
             high_to_low = tuple(reversed(low_to_high))
@@ -426,10 +434,12 @@ def find_voicings(tuning: Sequence[int], root_pc: int, chord: ChordType,
                 return
             span = (max(fretted) - min(fretted)) if fretted else 0
             opens = len(played) - len(fretted)
+            # Open strings help in open position but are awkward up the neck.
+            open_weight = -0.15 if (not fretted or max(fretted) <= 3) else 0.5
             score = (span * 0.6 + gaps * 2.5
                      - len(played) * 0.4
                      - len(set(notes)) * 0.5
-                     - opens * 0.15)
+                     + opens * open_weight)
             found[high_to_low] = score
 
         dfs(0, 0, 0, 0)
@@ -445,6 +455,14 @@ def find_voicings(tuning: Sequence[int], root_pc: int, chord: ChordType,
             trimmed.append(v)
             per_pos[v.position] = c + 1
     return trimmed[:max_results]
+
+
+def best_voicing_index(voicings: Sequence[Voicing]) -> int:
+    """Index of the most practical voicing (low on the neck, easy to play)."""
+    if not voicings:
+        return 0
+    return min(range(len(voicings)),
+               key=lambda i: voicings[i].score + 0.4 * voicings[i].position)
 
 
 # ── Key detection (Krumhansl–Schmuckler) ──────────────────────────────────────

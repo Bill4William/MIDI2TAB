@@ -8,8 +8,10 @@ tuning, the song key and the generated tab without depending on App itself.
 
 from __future__ import annotations
 
+import os
+import tempfile
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
 from typing import Callable, Dict, List, Optional, Tuple
 
 import customtkinter as ctk
@@ -20,6 +22,7 @@ from .music_theory import (
     ROOT_CHOICES,
     SCALE_FAMILIES,
     Voicing,
+    best_voicing_index,
     chord_degree_map,
     default_root_name,
     degree_labels,
@@ -32,6 +35,13 @@ from .music_theory import (
     parse_key_signature,
     spell_chord,
     spell_scale,
+)
+from .sheet_exporter import (
+    ChordItem,
+    ScaleItem,
+    SheetItem,
+    export_sheet,
+    open_for_print,
 )
 from .tab_generator import parse_note_name
 
@@ -94,6 +104,8 @@ class FretboardWindow(ctk.CTkToplevel):
         self._voicing_cache: Dict[tuple, List[Voicing]] = {}
         self._tab_counts: Dict[Tuple[int, int], int] = {}
         self._hidden_tab_notes = 0
+        self._sheet: List[SheetItem] = []
+        self._sheet_dialog: Optional["SheetDialog"] = None
 
         self._scale_on   = tk.BooleanVar(value=True)
         self._root_var   = tk.StringVar(value="C")
@@ -232,6 +244,10 @@ class FretboardWindow(ctk.CTkToplevel):
         ctk.CTkButton(sync, text="⇧ To MIDI2TAB", width=112, height=26,
                       font=ctk.CTkFont(size=11),
                       command=self._push_tuning).pack(side="left")
+        self._sheet_btn = ctk.CTkButton(side, text="Print Sheet (0)…", width=228,
+                                        height=26, font=ctk.CTkFont(size=11),
+                                        command=self._open_sheet)
+        self._sheet_btn.pack(pady=(4, 0))
 
     def _rebuild_string_boxes(self) -> None:
         for w in self._strings_frame.winfo_children():
@@ -339,6 +355,9 @@ class FretboardWindow(ctk.CTkToplevel):
                       fg_color=("gray75", "gray25"),
                       hover_color=("gray65", "gray30"),
                       command=self._reset).pack(side="left", padx=2)
+        ctk.CTkButton(r2, text="+ Sheet", width=64, height=26,
+                      font=ctk.CTkFont(size=11),
+                      command=self._add_scale_to_sheet).pack(side="left", padx=(6, 2))
 
         # Chord
         ch = self._card(row, "Chord")
@@ -377,6 +396,9 @@ class FretboardWindow(ctk.CTkToplevel):
         ctk.CTkButton(c2, text="Copy tab", width=80, height=26,
                       font=ctk.CTkFont(size=11),
                       command=self._copy_voicing).pack(side="left", padx=6)
+        ctk.CTkButton(c2, text="+ Sheet", width=64, height=26,
+                      font=ctk.CTkFont(size=11),
+                      command=self._add_chord_to_sheet).pack(side="left")
 
     def _build_diatonic_bar(self) -> None:
         bar = ctk.CTkFrame(self, fg_color="transparent")
@@ -479,7 +501,7 @@ class FretboardWindow(ctk.CTkToplevel):
 
     def _chord_changed(self) -> None:
         self._chord_on.set(True)
-        self._voicing_idx = 0
+        self._voicing_idx = -1          # pick the best voicing once computed
         self._refresh_all()
 
     def _compute_voicings(self) -> None:
@@ -498,8 +520,8 @@ class FretboardWindow(ctk.CTkToplevel):
                 root_in_bass=self._root_in_bass.get())
             self.configure(cursor="")
         self._voicings = self._voicing_cache[key]
-        if self._voicing_idx >= len(self._voicings):
-            self._voicing_idx = 0
+        if not 0 <= self._voicing_idx < len(self._voicings):
+            self._voicing_idx = best_voicing_index(self._voicings)
 
     def _current_voicing(self) -> Optional[Voicing]:
         if self._chord_on.get() and self._voicings:
@@ -572,11 +594,116 @@ class FretboardWindow(ctk.CTkToplevel):
                 state="normal" if ctype else "disabled",
                 command=lambda c=croot, t=ctype: self._pick_chord(c, t),
             ).pack(side="left", padx=2)
+        ctk.CTkButton(
+            self._diatonic_frame, text="+ All to sheet", width=90, height=26,
+            font=ctk.CTkFont(size=11),
+            command=self._add_diatonic_to_sheet,
+        ).pack(side="left", padx=(8, 2))
 
     def _pick_chord(self, root_pc: int, ctype) -> None:
         self._chord_root.set(ROOT_CHOICES[root_pc])
         self._chord_type.set(ctype.name)
         self._chord_changed()
+
+    # ── Print sheet ───────────────────────────────────────────────────────────
+
+    def _string_names(self) -> List[str]:
+        return [midi_to_name(p).rstrip("0123456789-") for p in self._tuning]
+
+    def _scale_item(self) -> ScaleItem:
+        root, ivs = self._scale()
+        names = spell_scale(root, ivs)
+        degs = degree_labels(ivs)
+        by_pc = {(root + iv) % 12: (nm, dg) for iv, nm, dg in zip(ivs, names, degs)}
+        use_deg = self._labels_var.get() == "Degrees"
+        cells = {}
+        for s, open_p in enumerate(self._tuning):
+            for f in range(NUM_FRETS + 1):
+                pc = (open_p + f) % 12
+                if pc in by_pc:
+                    nm, dg = by_pc[pc]
+                    cells[(s, f)] = (dg if use_deg else nm, pc == root)
+        return ScaleItem(
+            title=f"{names[0]} {self._mode_var.get()}",
+            subtitle="  ".join(names) + "     (" + " ".join(degs) + ")"
+            + f"     Tuning: {' '.join(reversed(self._string_names()))}",
+            string_names=self._string_names(), cells=cells, num_frets=NUM_FRETS)
+
+    def _chord_item(self, root: int, ctype, voicing: Voicing) -> ChordItem:
+        spelled = spell_chord(root, ctype, self._chord_root_name(root))
+        degs = chord_degree_map(root, ctype)
+        use_deg = self._labels_var.get() == "Degrees"
+        labels, roots = [], []
+        for s, f in enumerate(voicing.frets):
+            pc = (self._tuning[s] + f) % 12
+            labels.append("" if f == MUTED else
+                          (degs.get(pc, "") if use_deg else spelled.get(pc, "")))
+            roots.append(f != MUTED and pc == root)
+        return ChordItem(
+            title=self._chord_root_name(root) + ctype.symbol,
+            subtitle=voicing.shape(),
+            string_names=self._string_names(), frets=voicing.frets,
+            labels=labels, roots=roots)
+
+    def _voicings_for(self, root: int, ctype) -> List[Voicing]:
+        key = (tuple(self._tuning), root, ctype.name,
+               int(self._span_var.get()), self._root_in_bass.get())
+        if key not in self._voicing_cache:
+            self._voicing_cache[key] = find_voicings(
+                self._tuning, root, ctype, max_fret=NUM_FRETS,
+                max_span=int(self._span_var.get()),
+                root_in_bass=self._root_in_bass.get())
+        return self._voicing_cache[key]
+
+    def _add_to_sheet(self, items: List[SheetItem], what: str) -> None:
+        self._sheet.extend(items)
+        self._sheet_changed()
+        self._status.set(f"Added {what} to the print sheet "
+                         f"({len(self._sheet)} item(s)).")
+
+    def _add_scale_to_sheet(self) -> None:
+        item = self._scale_item()
+        self._add_to_sheet([item], item.title)
+
+    def _add_chord_to_sheet(self) -> None:
+        v = self._current_voicing()
+        if v is None:
+            messagebox.showinfo("No Chord",
+                "Turn on a chord with a playable voicing first.", parent=self)
+            return
+        root, ctype = self._chord()
+        item = self._chord_item(root, ctype, v)
+        self._add_to_sheet([item], f"{item.title} ({v.shape()})")
+
+    def _add_diatonic_to_sheet(self) -> None:
+        root, ivs = self._scale()
+        items, missing = [], []
+        for _, croot, ctype in diatonic_chords(root, ivs, self._sevenths.get()):
+            if ctype is None:
+                continue
+            voicings = self._voicings_for(croot, ctype)
+            if voicings:
+                best = voicings[best_voicing_index(voicings)]
+                items.append(self._chord_item(croot, ctype, best))
+            else:
+                missing.append(self._chord_root_name(croot) + ctype.symbol)
+        self._add_to_sheet(items, f"{len(items)} chords in key")
+        if missing:
+            self._status.set(self._status.get() + "  No playable voicing for: "
+                             + ", ".join(missing))
+
+    def _sheet_changed(self) -> None:
+        self._sheet_btn.configure(text=f"Print Sheet ({len(self._sheet)})…")
+        if self._sheet_dialog is not None and self._sheet_dialog.winfo_exists():
+            self._sheet_dialog.refresh()
+
+    def _open_sheet(self) -> None:
+        if self._sheet_dialog is not None and self._sheet_dialog.winfo_exists():
+            self._sheet_dialog.lift()
+            self._sheet_dialog.focus_force()
+            return
+        self._sheet_dialog = SheetDialog(self, self._sheet, self._sheet_changed,
+                                         lefty=self._lefty.get)
 
     # ── Tab overlay ───────────────────────────────────────────────────────────
 
@@ -825,3 +952,142 @@ class FretboardWindow(ctk.CTkToplevel):
     def _clear_highlight(self) -> None:
         self._highlight.clear()
         self._redraw()
+
+
+class SheetDialog(ctk.CTkToplevel):
+    """Arrange the collected scales and chords, then save or print them."""
+
+    def __init__(self, master, items: List[SheetItem],
+                 on_change: Callable[[], None],
+                 lefty: Callable[[], bool]) -> None:
+        super().__init__(master)
+        self.title("Print Sheet")
+        self.geometry("460x520")
+        self.minsize(380, 380)
+        self._items = items            # shared list, edited in place
+        self._on_change = on_change
+        self._lefty = lefty
+        self._title_var = tk.StringVar(value="Scales & Chords")
+
+        self.grid_columnconfigure(0, weight=1)
+        self.grid_rowconfigure(1, weight=1)
+
+        top = ctk.CTkFrame(self, fg_color="transparent")
+        top.grid(row=0, column=0, sticky="ew", padx=12, pady=(12, 6))
+        ctk.CTkLabel(top, text="Title:", font=ctk.CTkFont(size=12)).pack(side="left")
+        ctk.CTkEntry(top, textvariable=self._title_var).pack(
+            side="left", fill="x", expand=True, padx=(6, 0))
+
+        mid = ctk.CTkFrame(self, fg_color="transparent")
+        mid.grid(row=1, column=0, sticky="nsew", padx=12)
+        mid.grid_columnconfigure(0, weight=1)
+        mid.grid_rowconfigure(0, weight=1)
+        dark = ctk.get_appearance_mode().lower() == "dark"
+        self._list = tk.Listbox(
+            mid, activestyle="none", selectmode="extended",
+            font=("Helvetica", 11), borderwidth=0, highlightthickness=0,
+            bg="#1e1e1e" if dark else "#ffffff",
+            fg="#d4d4d4" if dark else "#1a1a1a",
+            selectbackground="#2fa572", selectforeground="white")
+        self._list.grid(row=0, column=0, sticky="nsew")
+
+        btns = ctk.CTkFrame(mid, fg_color="transparent")
+        btns.grid(row=0, column=1, sticky="n", padx=(8, 0))
+        for text, cmd in (("▲ Up", lambda: self._move(-1)),
+                          ("▼ Down", lambda: self._move(1)),
+                          ("Remove", self._remove),
+                          ("Clear all", self._clear)):
+            ctk.CTkButton(btns, text=text, width=90, height=28,
+                          font=ctk.CTkFont(size=11),
+                          command=cmd).pack(pady=2)
+
+        bottom = ctk.CTkFrame(self, fg_color="transparent")
+        bottom.grid(row=2, column=0, sticky="ew", padx=12, pady=10)
+        self._count = ctk.CTkLabel(bottom, text="", font=ctk.CTkFont(size=11),
+                                   text_color=("gray40", "gray60"))
+        self._count.pack(side="left")
+        ctk.CTkButton(bottom, text="Print", width=80, height=30,
+                      command=self._print).pack(side="right")
+        ctk.CTkButton(bottom, text="Save PDF…", width=90, height=30,
+                      command=self._save).pack(side="right", padx=6)
+
+        self.bind("<Delete>", lambda _: self._remove())
+        self.refresh()
+        self.after(150, lambda: (self.lift(), self.focus_force()))
+
+    @staticmethod
+    def _describe(item: SheetItem) -> str:
+        if isinstance(item, ScaleItem):
+            return f"Scale   {item.title}"
+        return f"Chord   {item.title}   {item.subtitle}"
+
+    def refresh(self, select: Optional[List[int]] = None) -> None:
+        self._list.delete(0, "end")
+        for item in self._items:
+            self._list.insert("end", self._describe(item))
+        for i in select or []:
+            self._list.selection_set(i)
+        n_s = sum(isinstance(i, ScaleItem) for i in self._items)
+        self._count.configure(
+            text=f"{n_s} scale(s), {len(self._items) - n_s} chord(s)")
+
+    def _selected(self) -> List[int]:
+        return list(self._list.curselection())
+
+    def _move(self, delta: int) -> None:
+        sel = self._selected()
+        if not sel:
+            return
+        if (delta < 0 and sel[0] == 0) or \
+                (delta > 0 and sel[-1] == len(self._items) - 1):
+            return
+        for i in (sel if delta < 0 else reversed(sel)):
+            j = i + delta
+            self._items[i], self._items[j] = self._items[j], self._items[i]
+        self._on_change()
+        self.refresh([i + delta for i in sel])
+
+    def _remove(self) -> None:
+        for i in reversed(self._selected()):
+            del self._items[i]
+        self._on_change()
+
+    def _clear(self) -> None:
+        if self._items and messagebox.askyesno(
+                "Clear Sheet", "Remove everything from the sheet?", parent=self):
+            self._items.clear()
+            self._on_change()
+
+    def _check_not_empty(self) -> bool:
+        if self._items:
+            return True
+        messagebox.showinfo("Empty Sheet",
+            "Add scales or chords with the '+ Sheet' buttons first.", parent=self)
+        return False
+
+    def _export(self, path: str) -> None:
+        export_sheet(self._items, path,
+                     title=self._title_var.get().strip() or "Scales & Chords",
+                     lefty=self._lefty())
+
+    def _save(self) -> None:
+        if not self._check_not_empty():
+            return
+        path = filedialog.asksaveasfilename(
+            parent=self, title="Save Sheet as PDF", defaultextension=".pdf",
+            filetypes=[("PDF files", "*.pdf"), ("All files", "*.*")],
+            initialfile="scales_and_chords.pdf")
+        if path:
+            self._export(path)
+            self._count.configure(text=f"Saved: {os.path.basename(path)}")
+
+    def _print(self) -> None:
+        if not self._check_not_empty():
+            return
+        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+            path = tmp.name
+        self._export(path)
+        try:
+            self._count.configure(text=open_for_print(path))
+        except Exception as exc:
+            messagebox.showerror("Print Error", str(exc), parent=self)

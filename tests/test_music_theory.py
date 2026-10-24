@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from src.music_theory import (
     CHORD_TYPES,
     MUTED,
+    best_voicing_index,
     SCALE_FAMILIES,
     degree_labels,
     detect_key,
@@ -95,6 +96,9 @@ class TestSpelling(unittest.TestCase):
                          {10: "Bb", 1: "Db", 5: "F", 8: "Ab"})
         self.assertEqual(spell_chord(2, CHORD_TYPES["Major"]),
                          {2: "D", 6: "F#", 9: "A"})
+        # Double accidentals are simplified for readability
+        self.assertEqual(spell_chord(4, CHORD_TYPES["Dominant 7 #9"])[7], "G")
+        self.assertEqual(spell_chord(0, CHORD_TYPES["Diminished 7"])[9], "A")
 
     def test_pc_from_name(self):
         self.assertEqual(pc_from_name("C#/Db"), 1)
@@ -170,6 +174,19 @@ class TestVoicings(unittest.TestCase):
                     bass = next(f for f in reversed(v.frets) if f != MUTED)
                     lowest = max(s for s, f in enumerate(v.frets) if f != MUTED)
                     self.assertEqual((tuning[lowest] + bass) % 12, 2)
+
+    def test_open_string_under_required_barre_is_rejected(self):
+        # 103211 would need a fret-1 barre, which mutes the open A
+        self.assertNotIn("103211", self._shapes(GUITAR_6, 5, "Major"))
+
+    def test_best_voicing_matches_standard_charts(self):
+        cases = {(5, "Major"): "133211", (11, "Minor"): "x24432",
+                 (4, "Minor 7"): "020000", (9, "Dominant 7"): "x02020",
+                 (0, "Major"): "x32010", (7, "Major"): "320003"}
+        for (root, name), shape in cases.items():
+            v = find_voicings(GUITAR_6, root, CHORD_TYPES[name])
+            self.assertEqual(v[best_voicing_index(v)].shape(), shape, name)
+        self.assertEqual(best_voicing_index([]), 0)
 
     def test_inversions_when_root_not_required_in_bass(self):
         shapes = self._shapes(GUITAR_6, 0, "Major", root_in_bass=False)
