@@ -5,7 +5,7 @@
 ; ---------------------------------------------------------------
 
 #define MyAppName      "MIDI2TAB"
-#define MyAppVersion   "1.0.0"
+#define MyAppVersion   "1.1.0"
 #define MyAppPublisher "MIDI2TAB"
 #define MyAppExeName   "MIDI2TAB.exe"
 

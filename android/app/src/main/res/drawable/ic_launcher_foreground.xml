@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 108dp adaptive canvas; content kept inside the 66dp safe zone (21..87). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- fingerboard -->
+    <path android:fillColor="#5A4030" android:pathData="M30,28h48v52h-48z" />
+    <!-- nut -->
+    <path android:fillColor="#EDE6D6" android:pathData="M30,28h48v4h-48z" />
+    <!-- frets -->
+    <path android:fillColor="#B9BCC0" android:pathData="M30,44h48v1.5h-48zM30,58h48v1.5h-48zM30,72h48v1.5h-48z" />
+    <!-- strings -->
+    <path android:fillColor="#D8D0BE"
+        android:pathData="M34,28h1v52h-1zM42,28h1v52h-1zM50,28h1.2v52h-1.2zM58,28h1.2v52h-1.2zM66,28h1.5v52h-1.5zM74,28h1.5v52h-1.5z" />
+    <!-- scale dots -->
+    <path android:fillColor="#2FA572"
+        android:pathData="M42.5,51.5m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0M66.7,51.5m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0M58.6,65.5m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0" />
+    <!-- root dot -->
+    <path android:fillColor="#FF6B1A"
+        android:pathData="M50.6,37.5m-5,0a5,5 0,1 1,10 0a5,5 0,1 1,-10 0" />
+</vector>

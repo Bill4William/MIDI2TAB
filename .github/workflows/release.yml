@@ -49,7 +49,7 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
           fail=0
-          for f in src/gui.py build/MIDI2TAB.spec build/build_mac.sh; do
+          for f in src/gui.py build/MIDI2TAB.spec build/build_mac.sh android/app/build.gradle.kts; do
             if ! grep -q "$VERSION" "$f"; then
               echo "::error file=$f::does not mention version $VERSION (from build/installer.iss)"
               fail=1
@@ -82,9 +82,14 @@ jobs:
     if: needs.check.outputs.exists == 'false'
     uses: ./.github/workflows/build-mac.yml
 
+  android:
+    needs: check
+    if: needs.check.outputs.exists == 'false'
+    uses: ./.github/workflows/build-android.yml
+
   # ---- 3. Publish (skipped on pull requests) --------------------------------
   publish:
-    needs: [check, windows, macos]
+    needs: [check, windows, macos, android]
     if: needs.check.outputs.exists == 'false' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
@@ -108,7 +113,9 @@ jobs:
           files: |
             dist-release/*.exe
             dist-release/*.dmg
+            dist-release/*.apk
           body: |
             ## Download
             - **Windows:** `MIDI2TAB_Setup_v${{ needs.check.outputs.version }}.exe` — run it; if Windows shows "Windows protected your PC", click **More info → Run anyway** (the installer is not code-signed).
             - **macOS:** `MIDI2TAB_v${{ needs.check.outputs.version }}.dmg` — open it and drag MIDI2TAB to Applications. On first launch, open **System Settings → Privacy & Security** and click **Open Anyway** (the app is not notarized).
+            - **Android:** `MIDI2TAB-Fretboard_v${{ needs.check.outputs.version }}.apk` — the scales & chords Fretboard Explorer for phones and tablets (Android 8.0+). Open it on your device and allow installing from this source when asked.

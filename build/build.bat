@@ -78,7 +78,7 @@ if errorlevel 1 (
 echo.
 echo ==================================================
 echo   SUCCESS
-echo   Installer: installer_output\MIDI2TAB_Setup_v1.0.0.exe
+echo   Installer: installer_output\MIDI2TAB_Setup_v1.1.0.exe
 echo ==================================================
 goto :done
 

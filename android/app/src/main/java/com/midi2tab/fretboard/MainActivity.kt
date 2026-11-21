@@ -1,0 +1,99 @@
+package com.midi2tab.fretboard
+
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.content.Intent
+import android.os.Bundle
+import android.os.CancellationSignal
+import android.os.ParcelFileDescriptor
+import android.print.PageRange
+import android.print.PrintAttributes
+import android.print.PrintDocumentAdapter
+import android.print.PrintDocumentInfo
+import android.print.PrintManager
+import android.widget.Toast
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
+import androidx.core.content.FileProvider
+import com.midi2tab.fretboard.model.SheetItem
+import com.midi2tab.fretboard.sheet.writeSheetPdf
+import com.midi2tab.fretboard.ui.ExplorerScreen
+import com.midi2tab.fretboard.ui.ExplorerViewModel
+import com.midi2tab.fretboard.ui.FretboardTheme
+import com.midi2tab.fretboard.ui.PlatformActions
+import java.io.File
+import java.io.FileOutputStream
+
+class MainActivity : ComponentActivity(), PlatformActions {
+    private val vm: ExplorerViewModel by viewModels()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
+        setContent {
+            FretboardTheme {
+                ExplorerScreen(vm, this)
+            }
+        }
+    }
+
+    override fun copyText(label: String, text: String) {
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        cm.setPrimaryClip(ClipData.newPlainText(label, text))
+    }
+
+    override fun shareSheet(items: List<SheetItem>, title: String, lefty: Boolean) {
+        val dir = File(cacheDir, "sheets").apply { mkdirs() }
+        val name = title.replace(Regex("[^A-Za-z0-9 _-]"), "").trim().ifEmpty { "sheet" }
+        val file = File(dir, "$name.pdf")
+        FileOutputStream(file).use { writeSheetPdf(items, title, lefty, it) }
+        val uri = FileProvider.getUriForFile(this, "$packageName.files", file)
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "application/pdf"
+            putExtra(Intent.EXTRA_STREAM, uri)
+            putExtra(Intent.EXTRA_SUBJECT, title)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        startActivity(Intent.createChooser(send, "Share $title"))
+    }
+
+    override fun printSheet(items: List<SheetItem>, title: String, lefty: Boolean) {
+        val pm = getSystemService(Context.PRINT_SERVICE) as PrintManager
+        val attrs = PrintAttributes.Builder().setMediaSize(PrintAttributes.MediaSize.NA_LETTER).build()
+        pm.print(title, SheetPrintAdapter(items, title, lefty), attrs)
+    }
+
+    /** Hands the already-rendered PDF to Android's print framework. */
+    private inner class SheetPrintAdapter(
+        private val items: List<SheetItem>,
+        private val title: String,
+        private val lefty: Boolean,
+    ) : PrintDocumentAdapter() {
+        override fun onLayout(
+            oldAttributes: PrintAttributes?, newAttributes: PrintAttributes,
+            cancellationSignal: CancellationSignal, callback: LayoutResultCallback, extras: Bundle?,
+        ) {
+            if (cancellationSignal.isCanceled) return callback.onLayoutCancelled()
+            val info = PrintDocumentInfo.Builder("$title.pdf")
+                .setContentType(PrintDocumentInfo.CONTENT_TYPE_DOCUMENT)
+                .build()
+            callback.onLayoutFinished(info, true)
+        }
+
+        override fun onWrite(
+            pages: Array<out PageRange>, destination: ParcelFileDescriptor,
+            cancellationSignal: CancellationSignal, callback: WriteResultCallback,
+        ) {
+            try {
+                FileOutputStream(destination.fileDescriptor).use { writeSheetPdf(items, title, lefty, it) }
+                callback.onWriteFinished(arrayOf(PageRange.ALL_PAGES))
+            } catch (e: Exception) {
+                callback.onWriteFailed(e.message)
+                runOnUiThread { Toast.makeText(this@MainActivity, "Print failed: ${e.message}", Toast.LENGTH_LONG).show() }
+            }
+        }
+    }
+}

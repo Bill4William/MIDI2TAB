@@ -1,0 +1,62 @@
+name: Build Android App
+
+# Runs on every push to main, pull requests into main, or manually.
+# release.yml also calls it to build the APK for automatic releases.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # Unit tests include parity with the desktop theory engine, the PDF
+      # sheet drawing, and Robolectric screen renders.
+      - name: Unit tests, lint and release build
+        run: ./gradlew --no-daemon :app:testDebugUnitTest :app:lintRelease :app:assembleRelease
+
+      - name: Name the APK after the version
+        run: |
+          VERSION=$(sed -n 's/^val appVersion = "\(.*\)"/\1/p' app/build.gradle.kts)
+          mkdir -p ../installer_output
+          cp app/build/outputs/apk/release/app-release.apk "../installer_output/MIDI2TAB-Fretboard_v${VERSION}.apk"
+          ls -la ../installer_output
+
+      - name: Upload APK as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MIDI2TAB-Android
+          path: installer_output/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-reports
+          path: android/app/build/reports/
+          retention-days: 7
