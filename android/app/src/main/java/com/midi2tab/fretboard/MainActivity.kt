@@ -18,6 +18,10 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.core.content.FileProvider
+import androidx.core.content.edit
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
+import com.midi2tab.fretboard.model.SettingsStore
 import com.midi2tab.fretboard.model.SheetItem
 import com.midi2tab.fretboard.sheet.writeSheetPdf
 import com.midi2tab.fretboard.ui.ExplorerScreen
@@ -28,7 +32,9 @@ import java.io.File
 import java.io.FileOutputStream
 
 class MainActivity : ComponentActivity(), PlatformActions {
-    private val vm: ExplorerViewModel by viewModels()
+    private val vm: ExplorerViewModel by viewModels {
+        viewModelFactory { initializer { ExplorerViewModel(PrefsStore(applicationContext)) } }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,4 +102,11 @@ class MainActivity : ComponentActivity(), PlatformActions {
             }
         }
     }
+}
+
+/** Settings and saved tunings kept in the app's private SharedPreferences. */
+private class PrefsStore(context: Context) : SettingsStore {
+    private val prefs = context.getSharedPreferences("fretboard", Context.MODE_PRIVATE)
+    override fun load(key: String): String? = prefs.getString(key, null)
+    override fun save(key: String, value: String) = prefs.edit { putString(key, value) }
 }

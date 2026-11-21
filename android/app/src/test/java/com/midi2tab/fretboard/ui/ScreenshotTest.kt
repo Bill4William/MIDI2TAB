@@ -40,6 +40,16 @@ class ScreenshotTest {
         update { it.copy(tuning = listOf(43, 38, 33, 28, 23), scaleRoot = 4, family = "Pentatonic", modeIndex = 4) }
     }
 
+    // Extra-tall screen so the "My tunings" list below the tuning editor is in frame.
+    @Config(qualifiers = "w411dp-h1500dp-night-xxhdpi")
+    @Test fun savedTunings() = shot("06_saved_tunings", 2) {
+        update { it.copy(tuning = listOf(62, 57, 53, 48, 43, 36)) }
+        saveTuning("Drop C")
+        update { it.copy(tuning = listOf(62, 59, 55, 50, 45, 38)) }
+        saveTuning("Double drop D")
+        message = null
+    }
+
     @Test fun sheetTab() = shot("04_sheet", 3) {
         addScaleToSheet()
         update { it.copy(chordOn = true, chordRoot = 0, chordTypeName = "Major") }

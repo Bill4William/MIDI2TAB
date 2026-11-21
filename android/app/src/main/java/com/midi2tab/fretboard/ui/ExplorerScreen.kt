@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -55,7 +56,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.midi2tab.fretboard.model.ChordSheetItem
+import com.midi2tab.fretboard.model.MAX_NAME_LENGTH
 import com.midi2tab.fretboard.model.PRESETS
+import com.midi2tab.fretboard.model.SavedTuning
+import com.midi2tab.fretboard.model.cleanTuningName
+import com.midi2tab.fretboard.model.matchingTuningName
+import com.midi2tab.fretboard.model.tuningLabel
 import com.midi2tab.fretboard.model.ScaleSheetItem
 import com.midi2tab.fretboard.model.SheetItem
 import com.midi2tab.fretboard.model.chordSummary
@@ -327,6 +333,11 @@ private fun ColumnScope.TuningTab(vm: ExplorerViewModel) {
         Text("${s.tuning.size}", fontSize = 18.sp, fontWeight = FontWeight.Bold)
         FilledTonalButton(onClick = { vm.changeStringCount(1) }) { Text("+") }
     }
+    val current = matchingTuningName(s.tuning, vm.savedTunings)
+    Text(
+        "${current ?: "Custom"}:  ${tuningLabel(s.tuning)}",
+        fontWeight = FontWeight.SemiBold,
+    )
     Text("Low string first. Tap ▲ / ▼ to retune by a semitone.", fontSize = 12.sp,
         color = MaterialTheme.colorScheme.onSurfaceVariant)
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -346,8 +357,64 @@ private fun ColumnScope.TuningTab(vm: ExplorerViewModel) {
         FilledTonalButton(onClick = { vm.shiftAll(1) }) { Text("▲") }
         FilledTonalButton(onClick = { vm.shiftAll(-1) }) { Text("▼") }
     }
-    Picker("Presets", PRESETS, { it.name }, vm::applyPreset, Modifier.fillMaxWidth())
+    var showSave by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<SavedTuning?>(null) }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Picker("Presets", PRESETS, { it.name }, vm::applyPreset, Modifier.weight(1f))
+        Button(onClick = { showSave = true }) { Text("Save tuning…") }
+    }
     SwitchRow("Left-handed", s.lefty) { on -> vm.update { it.copy(lefty = on) } }
+
+    HorizontalDivider()
+    Text("My tunings", fontWeight = FontWeight.SemiBold)
+    if (vm.savedTunings.isEmpty()) {
+        Text("Tunings you save appear here and stay on this device.", fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    vm.savedTunings.forEach { t ->
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(t.name, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${t.tuning.size} strings  ·  ${tuningLabel(t.tuning)}", fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            TextButton(onClick = { vm.applySavedTuning(t) }, enabled = t.tuning != s.tuning) { Text("Load") }
+            TextButton(onClick = { pendingDelete = t }) { Text("✕") }
+        }
+    }
+
+    if (showSave) {
+        var name by remember { mutableStateOf(current ?: "Custom ${tuningLabel(s.tuning)}") }
+        AlertDialog(
+            onDismissRequest = { showSave = false },
+            title = { Text("Save tuning") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(tuningLabel(s.tuning), fontFamily = FontFamily.Monospace)
+                    OutlinedTextField(value = name, onValueChange = { name = it.take(MAX_NAME_LENGTH) },
+                        label = { Text("Name") }, singleLine = true)
+                    if (vm.savedTunings.any { it.name.equals(cleanTuningName(name), ignoreCase = true) }) {
+                        Text("Replaces the saved tuning with this name.", fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.secondary)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { if (vm.saveTuning(name)) showSave = false },
+                    enabled = cleanTuningName(name).isNotEmpty()) { Text("Save") }
+            },
+            dismissButton = { TextButton(onClick = { showSave = false }) { Text("Cancel") } },
+        )
+    }
+    pendingDelete?.let { t ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("Delete “${t.name}”?") },
+            text = { Text(tuningLabel(t.tuning)) },
+            confirmButton = { TextButton(onClick = { vm.deleteTuning(t); pendingDelete = null }) { Text("Delete") } },
+            dismissButton = { TextButton(onClick = { pendingDelete = null }) { Text("Cancel") } },
+        )
+    }
 }
 
 @Composable

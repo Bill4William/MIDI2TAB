@@ -46,7 +46,8 @@ Convert MIDI files to guitar and bass tablature — with a clean desktop GUI, PD
 **MIDI2TAB Fretboard** brings the Fretboard Explorer (scales, modes, chords and print sheets) to phones and tablets running Android 8.0 or newer. It is the same theory engine as the desktop app, ported to Kotlin, and its tests check it gives identical answers. MIDI conversion stays desktop-only.
 
 - Neck drawn vertically in portrait (like a chord chart) and horizontally in landscape; left-handed mode
-- 1–12 strings, any tuning, guitar/bass/ukulele presets
+- 1–12 strings, any tuning, guitar/bass/ukulele presets; save your own tunings by name (load or delete them any time)
+- Remembers your tuning, scale, chord and display settings between launches
 - Every scale and mode from the desktop app, note names or degrees, tap a note to highlight it everywhere
 - Chords in key, chord voicing finder for any tuning, copy a voicing as tab
 - Print sheets: collect scales and chords, then share the PDF or print it

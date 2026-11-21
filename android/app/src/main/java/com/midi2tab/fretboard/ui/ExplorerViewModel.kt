@@ -8,6 +8,17 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.midi2tab.fretboard.model.ExplorerState
+import com.midi2tab.fretboard.model.KEY_STATE
+import com.midi2tab.fretboard.model.KEY_TUNINGS
+import com.midi2tab.fretboard.model.MemoryStore
+import com.midi2tab.fretboard.model.SavedTuning
+import com.midi2tab.fretboard.model.SettingsStore
+import com.midi2tab.fretboard.model.cleanTuningName
+import com.midi2tab.fretboard.model.decodeState
+import com.midi2tab.fretboard.model.decodeTunings
+import com.midi2tab.fretboard.model.encodeState
+import com.midi2tab.fretboard.model.encodeTunings
+import com.midi2tab.fretboard.model.tuningLabel
 import com.midi2tab.fretboard.model.MAX_PITCH
 import com.midi2tab.fretboard.model.MAX_STRINGS
 import com.midi2tab.fretboard.model.MIN_PITCH
@@ -29,8 +40,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 
-class ExplorerViewModel : ViewModel() {
-    var state by mutableStateOf(ExplorerState())
+class ExplorerViewModel(private val store: SettingsStore = MemoryStore()) : ViewModel() {
+    var state by mutableStateOf(decodeState(store.load(KEY_STATE)))
+        private set
+    var savedTunings by mutableStateOf(decodeTunings(store.load(KEY_TUNINGS)))
         private set
     var voicings by mutableStateOf<List<Voicing>>(emptyList())
         private set
@@ -49,6 +62,11 @@ class ExplorerViewModel : ViewModel() {
     private val cache = ConcurrentHashMap<VoicingKey, List<Voicing>>()
     private var searchJob: Job? = null
 
+    init {
+        // A chord left on at the last launch needs its voicings found again.
+        if (state.chordOn) refreshVoicings(pickBest = true)
+    }
+
     private data class VoicingKey(
         val tuning: List<Int>, val root: Int, val type: String, val span: Int, val rootInBass: Boolean,
     )
@@ -64,6 +82,7 @@ class ExplorerViewModel : ViewModel() {
         val old = state
         val new = change(old)
         state = new
+        if (new != old) store.save(KEY_STATE, encodeState(new))
         val chordInputsChanged = key(old) != key(new) || old.chordOn != new.chordOn
         if (chordInputsChanged || pickBest) refreshVoicings(pickBest || key(old) != key(new))
     }
@@ -112,6 +131,29 @@ class ExplorerViewModel : ViewModel() {
     }
 
     fun applyPreset(p: Preset) = update { it.copy(tuning = p.tuning) }
+
+    fun applySavedTuning(t: SavedTuning) = update { it.copy(tuning = t.tuning) }
+
+    /** Saves the current tuning under [rawName], replacing one with the same name. */
+    fun saveTuning(rawName: String): Boolean {
+        val name = cleanTuningName(rawName)
+        if (name.isEmpty()) {
+            message = "Give the tuning a name"
+            return false
+        }
+        val replaced = savedTunings.any { it.name.equals(name, ignoreCase = true) }
+        savedTunings = savedTunings.filterNot { it.name.equals(name, ignoreCase = true) } +
+            SavedTuning(name, state.tuning)
+        store.save(KEY_TUNINGS, encodeTunings(savedTunings))
+        message = (if (replaced) "Updated" else "Saved") + " tuning “$name” (${tuningLabel(state.tuning)})"
+        return true
+    }
+
+    fun deleteTuning(t: SavedTuning) {
+        savedTunings = savedTunings - t
+        store.save(KEY_TUNINGS, encodeTunings(savedTunings))
+        message = "Deleted tuning “${t.name}”"
+    }
 
     // ── Scale / chord ─────────────────────────────────────────────────────────
 
