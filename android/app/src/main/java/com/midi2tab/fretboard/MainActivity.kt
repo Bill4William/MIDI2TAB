@@ -17,6 +17,13 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.core.content.FileProvider
 import androidx.core.content.edit
 import androidx.lifecycle.viewmodel.initializer
@@ -38,12 +45,37 @@ class MainActivity : ComponentActivity(), PlatformActions {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        CrashReporter.install(this)
+        val crash = if (savedInstanceState == null) CrashReporter.takeReport(this) else null
         enableEdgeToEdge()
         setContent {
             FretboardTheme {
                 ExplorerScreen(vm, this)
+                var report by remember { mutableStateOf(crash) }
+                report?.let { text ->
+                    AlertDialog(
+                        onDismissRequest = { report = null },
+                        title = { Text("The app closed unexpectedly") },
+                        text = { Text("Sharing the crash report helps get it fixed. It contains the error details, the app version and your phone model — nothing else.") },
+                        confirmButton = {
+                            TextButton(onClick = { shareText("MIDI2TAB Fretboard crash report", text); report = null }) {
+                                Text("Share report")
+                            }
+                        },
+                        dismissButton = { TextButton(onClick = { report = null }) { Text("Dismiss") } },
+                    )
+                }
             }
         }
+    }
+
+    private fun shareText(subject: String, text: String) {
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        startActivity(Intent.createChooser(send, subject))
     }
 
     override fun copyText(label: String, text: String) {

@@ -45,8 +45,16 @@ class ExplorerViewModel(private val store: SettingsStore = MemoryStore()) : View
         private set
     var savedTunings by mutableStateOf(decodeTunings(store.load(KEY_TUNINGS)))
         private set
-    var voicings by mutableStateOf<List<Voicing>>(emptyList())
-        private set
+    // Search results and the tuning/chord they were found for. A search runs in
+    // the background, so between a change and its result the stored list
+    // belongs to the old tuning (possibly a different string count); it must
+    // never be drawn against the new one.
+    private var foundVoicings by mutableStateOf<List<Voicing>>(emptyList())
+    private var foundFor by mutableStateOf<VoicingKey?>(null)
+
+    /** Voicings for the current tuning and chord; empty while a search is still running. */
+    val voicings: List<Voicing>
+        get() = if (state.chordOn && foundFor == key(state)) foundVoicings else emptyList()
     var voicingIndex by mutableIntStateOf(0)
         private set
     var searching by mutableStateOf(false)
@@ -56,7 +64,7 @@ class ExplorerViewModel(private val store: SettingsStore = MemoryStore()) : View
     val sheet = mutableStateListOf<SheetItem>()
 
     val currentVoicing: Voicing?
-        get() = if (state.chordOn) voicings.getOrNull(voicingIndex) else null
+        get() = voicings.getOrNull(voicingIndex)
 
     // Read and filled from background searches, so it must be thread-safe.
     private val cache = ConcurrentHashMap<VoicingKey, List<Voicing>>()
@@ -90,23 +98,22 @@ class ExplorerViewModel(private val store: SettingsStore = MemoryStore()) : View
     private fun refreshVoicings(pickBest: Boolean) {
         val s = state
         searchJob?.cancel()
-        if (!s.chordOn) {
-            voicings = emptyList()
-            return
-        }
+        if (!s.chordOn) return
         val k = key(s)
         searchJob = viewModelScope.launch {
             searching = true
             val result = withContext(Dispatchers.Default) { search(k, s.chordType) }
-            voicings = result
+            foundVoicings = result
+            foundFor = k
             if (pickBest || voicingIndex !in result.indices) voicingIndex = bestVoicingIndex(result)
             searching = false
         }
     }
 
     fun stepVoicing(delta: Int) {
-        if (voicings.isEmpty()) return
-        voicingIndex = Math.floorMod(voicingIndex + delta, voicings.size)
+        val vs = voicings
+        if (vs.isEmpty()) return
+        voicingIndex = Math.floorMod(voicingIndex + delta, vs.size)
     }
 
     // ── Tuning ────────────────────────────────────────────────────────────────

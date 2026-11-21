@@ -42,6 +42,15 @@ class ExplorerModelTest {
         assertTrue(tab, tab.trimEnd().endsWith("E|-x--|"))
     }
 
+    /** Regression: a 6-string voicing drawn on a 7-string neck crashed the app. */
+    @Test fun mismatchedVoicingDoesNotCrash() {
+        val six = findVoicings(standard.tuning, 0, chordType("Major")).first()
+        val sevenString = standard.copy(tuning = standard.tuning + 35, chordOn = true)
+        assertEquals(7 * 13, computeCells(sevenString, six).size)
+        val fourString = standard.copy(tuning = standard.tuning.take(4), chordOn = true)
+        assertEquals(4 * 13, computeCells(fourString, six).size)
+    }
+
     @Test fun chordToneRingsOnlyWhenAsked() {
         val s = standard.copy(chordOn = true, chordRoot = 2, chordTypeName = "Dominant 7")
         assertTrue(computeCells(s, null).none { it.chordRing })

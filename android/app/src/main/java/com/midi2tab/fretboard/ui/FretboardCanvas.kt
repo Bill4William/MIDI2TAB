@@ -167,7 +167,7 @@ private fun DrawScope.drawStringsAndLabels(
         // Thicker toward the bass
         val thick = (1f + 2.2f * (n - 1 - s) / maxOf(n - 1, 1).toFloat()) * density
         drawLine(p.string, g.point(g.fretLine(0), across), g.point(g.fretLine(NUM_FRETS + 1), across), thick)
-        val muted = voicing != null && voicing.frets[s] == MUTED
+        val muted = voicing != null && voicing.frets.getOrNull(s) == MUTED
         drawCentered(m, if (muted) "×" else names[s], g.point(g.labelAlong, across),
             if (muted) p.root else p.text, 14f, bold = true)
     }

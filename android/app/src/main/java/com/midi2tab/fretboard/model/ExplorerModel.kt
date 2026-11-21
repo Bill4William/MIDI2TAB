@@ -120,7 +120,8 @@ fun computeCells(s: ExplorerState, voicing: Voicing?): List<Cell> {
     for (str in s.tuning.indices) {
         for (fret in 0..NUM_FRETS) {
             val pc = mod(s.tuning[str] + fret, 12)
-            val inVoicing = v != null && v.frets[str] == fret
+            // getOrNull: never trust a voicing to match the tuning's string count
+            val inVoicing = v != null && v.frets.getOrNull(str) == fret
             val inChord = pc in chord
             val inScale = pc in scale
             val ring = !inVoicing && inChord && s.allChordTones
