@@ -37,8 +37,22 @@ Convert MIDI files to guitar and bass tablature — with a clean desktop GUI, PD
 
 | Platform | Installer |
 |----------|-----------|
-| Windows  | [MIDI2TAB_Setup_v1.0.0.exe](../../releases/latest) |
-| macOS    | [MIDI2TAB_v1.0.0.dmg](../../releases/latest) *(built via GitHub Actions)* |
+| Windows  | [MIDI2TAB_Setup_v1.1.0.exe](../../releases/latest) |
+| macOS    | [MIDI2TAB_v1.1.0.dmg](../../releases/latest) *(built via GitHub Actions)* |
+| Android  | [MIDI2TAB-Fretboard_v1.1.0.apk](../../releases/latest) *(scales & chords only)* |
+
+### Android app
+
+**MIDI2TAB Fretboard** brings the Fretboard Explorer (scales, modes, chords and print sheets) to phones and tablets running Android 8.0 or newer. It is the same theory engine as the desktop app, ported to Kotlin, and its tests check it gives identical answers. MIDI conversion stays desktop-only.
+
+- Neck drawn vertically in portrait (like a chord chart) and horizontally in landscape; left-handed mode
+- 1–12 strings, any tuning, guitar/bass/ukulele presets; save your own tunings by name (load or delete them any time)
+- Remembers your tuning, scale, chord and display settings between launches
+- Every scale and mode from the desktop app, note names or degrees, tap a note to highlight it everywhere
+- Chords in key, chord voicing finder for any tuning, copy a voicing as tab
+- Print sheets: collect scales and chords, then share the PDF or print it
+
+To install, download the `.apk` on your device and open it; Android asks you to allow installs from that source once. The app is not on Google Play.
 
 ---
 
@@ -78,7 +92,7 @@ To build locally on Windows:
    ```
    build\build.bat
    ```
-3. Output: `installer_output\MIDI2TAB_Setup_v1.0.0.exe`
+3. Output: `installer_output\MIDI2TAB_Setup_v1.1.0.exe`
 
 ### macOS disk image
 
@@ -94,13 +108,28 @@ To build locally on a Mac:
 pip3 install -r requirements.txt Pillow pyinstaller
 bash build/build_mac.sh
 ```
-Output: `installer_output/MIDI2TAB_v1.0.0.dmg`
+Output: `installer_output/MIDI2TAB_v1.1.0.dmg`
 
 ---
 
+### Android app
+
+Requires JDK 17+ and the Android SDK (or open the `android/` folder in Android Studio):
+
+```bash
+cd android
+./gradlew testDebugUnitTest      # theory parity tests, PDF drawing, screen renders
+./gradlew assembleRelease        # app/build/outputs/apk/release/app-release.apk
+./gradlew recordRoborazziDebug   # screenshots of the screens into app/build/outputs/roborazzi/
+```
+
+Every push to `main` also builds the APK via GitHub Actions (**Build Android App**, artifact **MIDI2TAB-Android**). The theory engine in `android/.../theory/MusicTheory.kt` is a port of `src/music_theory.py`; after changing the Python engine, run `python tools/gen_theory_golden.py` and the Android tests will show any difference.
+
+All builds are signed with `android/app/midi2tab-fretboard.keystore`, committed on purpose so every build installs as an update over the last one. That suits sideloading; a Google Play release would need a private key kept out of the repo.
+
 ### Publishing a release
 
-Releases are automatic. The **Release** workflow reads the version from `MyAppVersion` in `build/installer.iss`; whenever `main` carries a version that has no GitHub Release yet, it builds both installers and publishes release `vX.Y.Z` with the `.exe` and `.dmg` attached (downloadable without a GitHub account).
+Releases are automatic. The **Release** workflow reads the version from `MyAppVersion` in `build/installer.iss`; whenever `main` carries a version that has no GitHub Release yet, it builds the Windows installer, the macOS disk image and the Android app, and publishes release `vX.Y.Z` with the `.exe`, `.dmg` and `.apk` attached (downloadable without a GitHub account).
 
 To release a new version, change the version number in all of these, then merge to `main`:
 
@@ -108,6 +137,7 @@ To release a new version, change the version number in all of these, then merge 
 - `src/gui.py` (sidebar label and About box)
 - `build/MIDI2TAB.spec` (`CFBundleShortVersionString`, `CFBundleVersion`)
 - `build/build_mac.sh` (`VERSION`)
+- `android/app/build.gradle.kts` (`appVersion`)
 
 The workflow refuses to publish if any of them disagree. Pull requests run the whole release build without publishing.
 
@@ -147,7 +177,20 @@ MIDI2TAB/
 │   ├── test_core.py         # Unit tests
 │   ├── test_music_theory.py # Fretboard Explorer theory tests
 │   └── test_sheet_exporter.py # Scale/chord sheet PDF tests
+├── android/                 # MIDI2TAB Fretboard (Kotlin + Jetpack Compose)
+│   └── app/src/
+│       ├── main/java/com/midi2tab/fretboard/
+│       │   ├── theory/      # Port of src/music_theory.py
+│       │   ├── model/       # What the neck shows; sheet layout
+│       │   ├── sheet/       # PDF sheet drawing
+│       │   └── ui/          # Compose screens
+│       └── test/            # Parity, model, PDF and screenshot tests
+├── tools/
+│   └── gen_theory_golden.py # Golden data for the Android parity tests
 └── .github/
     └── workflows/
-        └── build-mac.yml    # GitHub Actions macOS build
+        ├── build-mac.yml     # macOS disk image
+        ├── build-windows.yml # Windows installer
+        ├── build-android.yml # Android APK
+        └── release.yml       # Publishes GitHub Releases automatically
 ```

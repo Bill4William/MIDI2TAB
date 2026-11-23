@@ -5,7 +5,7 @@
 #
 # Produces:
 #   dist/MIDI2TAB.app                    -- the application bundle
-#   installer_output/MIDI2TAB_v1.0.0.dmg -- drag-to-install disk image
+#   installer_output/MIDI2TAB_v1.1.0.dmg -- drag-to-install disk image
 #
 # Requirements:
 #   Python 3.9+  (python.org build recommended -- includes Tcl/Tk for tkinter)
@@ -53,7 +53,7 @@ echo
 echo "[3/3] Creating disk image (.dmg)..."
 mkdir -p installer_output
 
-VERSION="1.0.0"
+VERSION="1.1.0"
 DMG_NAME="MIDI2TAB_v${VERSION}.dmg"
 DMG_PATH="installer_output/${DMG_NAME}"
 

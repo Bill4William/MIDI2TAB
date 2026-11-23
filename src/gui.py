@@ -236,7 +236,7 @@ class App(ctk.CTk):
         ).grid(row=7, column=0, padx=10, pady=(0, 2), sticky="ew")
 
         ctk.CTkLabel(
-            sidebar, text="v1.0.0",
+            sidebar, text="v1.1.0",
             font=ctk.CTkFont(size=10),
             text_color=("gray60", "gray50"),
         ).grid(row=8, column=0, padx=20, pady=(0, 14), sticky="w")
@@ -799,7 +799,7 @@ class App(ctk.CTk):
     def _show_about(self) -> None:
         messagebox.showinfo(
             "About MIDI2TAB",
-            "MIDI2TAB  v1.0.0\n\n"
+            "MIDI2TAB  v1.1.0\n\n"
             "Converts MIDI files to guitar and bass tablature.\n\n"
             "• Custom string counts and tunings\n"
             "• Save and load your own instrument presets\n"
